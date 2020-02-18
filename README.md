@@ -3,12 +3,10 @@ Michael Brenan (mb45487) & John Herrick (jrh5735)
 
 ## Build Instructions
 
-No change from the default code - use the provided monolithic build instructions. We recommend building with
+No change from the default code - use the default build instructions. We recommend building with
 release mode to make the simulation not slow down with moderate numbers of particles.
 
 ```
-git clone --recursive https://github.com/xinyazhang/psim_starter_code psim
-cd psim
 mkdir build
 cd build
 cmake -DCMAKE_BUILD_TYPE=Release ..
