@@ -8,8 +8,7 @@
 
 namespace goo1 {
 
-struct Particle
-{
+struct Particle {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 

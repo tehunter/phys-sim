@@ -1,62 +1,34 @@
-# Introduction to Physical Simulation Project Starter Code
+# Goo Milestone 1
+Michael Brenan (mb45487) & John Herrick (jrh5735)
 
-## Preamble
+## Build Instructions
 
-We are going to use the same monolithic git repository to development all your
-physical simulation code, and the following instructions applies to all your
-projects.
+No change from the default code - use the provided monolithic build instructions. We recommend building with
+release mode to make the simulation not slow down with moderate numbers of particles.
 
-## Build Instruction
-
-This is a standard cmake project, with a few bundled git modules.
-To build this project, run:
 ```
 git clone --recursive https://github.com/xinyazhang/psim_starter_code psim
 cd psim
 mkdir build
 cd build
-cmake ..
+cmake -DCMAKE_BUILD_TYPE=Release ..
 make -j `nproc`
 ```
-These commands will clone the git repo into psim/ directory, and build the
-code inside `psim/build/` directory. The compiled the code can be found at
-`psim/bin`.
 
-Afterwards, you can run `./goo1.py` under the `psim/bin` directory.
-Note: this script must be run at `psim/bin`, otherwise it cannot find the
-compiled module.
+## Creative Component / Extension
 
-## Test your build
+None for this milestone; we'll do more next milestone ;)
 
-change directory to `psim/bin/`, and run `./goo1.py` for your implementation.
-and `./reference_goo1.py` for the reference implementation.
+## Discussion: Floor Force
 
-`bin/reference` contains the reference solution.
+We implemented a simple, conservative floor force based off of the potential energy function
 
-In addition, `bin/demo_test_goo1.py` demonstrates how to run the simulation
-without GUI. Therefore you can test your code on Lab machines remotely.
+V(q) = -(k/2)(-0.5 - q.y)^2     (if q.y < -0.05)
+     = 0                  (otherwise)
 
-## Quick start to write your simulation code
+Where q is the position of a particle; k is a strength constant which affects how quickly the particle rebounds off of
+the floor; we set it to 25000 by default (so quite strong). Differentiating this value function yields a force/Jacobian and
+Hessian of
 
-The starter code contains all essential code for visualization. All you need
-to do is to fill up the `// TODO ` sections inside `lib/core/goo1/GooCore.cpp`
-and its header file `lib/core/goo1/GooCore.cpp`.
-
-## Brief introduction to the code structure
-
-This repository organizes the source code in the following manner:
-* `lib/core/<project name>`: core physical simulation code
-* `lib/vis/<project name>`: visualization of the current physical system, with
-    [libigl](https://libigl.github.io/)
-* `lib/python/<project name>`: python binding code with pybind11
-* `src/<project name>`: Python code to invoke the built module
-* `third-party/`: git submodules
-* `bundle/`: bundled projects with does not have a git repo.
-
-## A Few Grading Criteria
-
-* Unless you are claiming extra credits for improvements of your GUI,
-  we are NOT going to evaluate your GUI.
-* During the evaluation, we are not going to build the GUI code inside the python module.
-  In other words, your simulation code should build and run well with `cmake -DPSIM_ENABLE_VISUALIZER=OFF`.
-  + This option can be toggled with `(cd build; ccmake .)`
+{F(q)}(dq) = k(-0.5 - q.y)
+{dF(q)}(dq)(dq2) = -k

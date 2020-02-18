@@ -34,3 +34,6 @@ tmp/
 logs/
 bin/
 *.pyc
+
+# VSCode
+.vscode/
