@@ -3,8 +3,9 @@ Michael Brenan (mb45487) & John Herrick (jrh5735)
 
 ## Build Instructions
 
-No change from the default code - use the default build instructions. We recommend building with
-release mode to make the simulation not slow down with moderate numbers of particles.
+No change from the default code - use the provided build instructions. We recommend building with
+release mode to make the simulation not slow down with moderate numbers of particles. Note that the
+submitted code comes with all of the third party dependencies already included.
 
 ```
 mkdir build
