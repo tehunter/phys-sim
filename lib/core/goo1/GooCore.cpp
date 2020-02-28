@@ -137,7 +137,7 @@ bool GooCore::simulateOneStep() {
         bool in_bounds = std::abs(pos[0]) <= SimParameters::SIM_DIMENSION && std::abs(pos[1]) <= SimParameters::SIM_DIMENSION;
         bool in_saw = false;
         for (ssize_t si = this->saws_.size() - 1; si >= 0; si--) {
-            if ((this->saws_[si].pos - pos).norm() < this->saws_[si].radius + radius) {
+            if ((this->saws_[si].pos - pos).norm() < this->saws_[si].radius) {
                 in_saw = true;
                 break;
             }

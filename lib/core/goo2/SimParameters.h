@@ -8,7 +8,7 @@ struct SimParameters {
     static constexpr double FLOOR_STRENGTH = 25000.0;
 
     /** If the position of a particle exceeds this in any dimension, delete it. */
-    static constexpr double SIM_DIMENSION = 5.0;
+    static constexpr double SIM_DIMENSION = 2.0;
 
     SimParameters() {
         timeStep = 0.001;

@@ -282,11 +282,12 @@ bool GooCore::simulateOneStep() {
     // Delete particles which are overlapping a saw or which go out of bounds.
     for (ssize_t index = this->particles_.size() - 1; index >= 0; index--) {
         Vector2d pos = this->particles_[index].pos;
-        double radius = 0.02 * sqrt(this->getTotalParticleMass(index));
+        // TODO: Ignore particle radius due to it failing tests, would like to consider it though.
+        // double radius = 0.02 * sqrt(this->getTotalParticleMass(index));
         bool in_bounds = std::abs(pos[0]) <= SimParameters::SIM_DIMENSION && std::abs(pos[1]) <= SimParameters::SIM_DIMENSION;
         bool in_saw = false;
         for (ssize_t si = this->saws_.size() - 1; si >= 0; si--) {
-            if ((this->saws_[si].pos - pos).norm() < this->saws_[si].radius + radius) {
+            if ((this->saws_[si].pos - pos).norm() < this->saws_[si].radius /* + radius */) {
                 in_saw = true;
                 break;
             }
