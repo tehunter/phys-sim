@@ -11,16 +11,19 @@ struct Particle {
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-    Particle(Eigen::Vector2d pos, double mass, bool isFixed, bool isInert)
+    Particle(Eigen::Vector2d pos, double mass, bool isFixed, bool isInert, int32_t uid)
         : pos(pos)
+        , prevpos(pos)
         , mass(mass)
         , fixed(isFixed)
         , inert(isInert)
+        , uid(uid)
     {
         vel.setZero();
     }
 
     Eigen::Vector2d pos;
+    Eigen::Vector2d prevpos;
     Eigen::Vector2d vel;
     double mass;
     bool fixed;

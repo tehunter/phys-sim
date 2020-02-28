@@ -21,16 +21,33 @@ public:
     ~GooCore();
 
     virtual void initSimulation() override;
-
     virtual bool simulateOneStep() override;
 
-    std::tuple<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::MatrixXd>
-    getCurrentMesh() const override;
+    std::tuple<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::MatrixXd> getCurrentMesh() const override;
+    std::shared_ptr<SimParameters> getPointerToSimParameters() { return params_; }
+    SimParameters getSimParameters() const { return *params_; }
+    void setSimParameters(const SimParameters& nsimp) { *params_ = nsimp; }
 
-    std::shared_ptr<SimParameters> getPointerToSimParameters()
-    {
-        return params_;
+    /*
+     * queryParticle: locate the particle with specific UID
+     *
+     * Returns: Tuple (particle, valid).
+     *          valid must be false if the particle with given uid cannot be
+     *          found.
+     */
+    std::tuple<Particle, bool> queryParticle(uint32_t uid) const {
+        for(const auto& p : particles_)
+            if (p.uid == uid) return std::make_tuple(p, true);
+
+        return std::make_tuple(Particle(Eigen::Vector2d(0.0,0.0), -1, false, false, -1), false);
     }
+
+    /**
+     * queryConnectivity: Detect whether from(i) is connected with to(i).
+     * 
+     * Returns: Eigen::VectorXi; ret(i) is nonzero is from(i) is connected to to(i).
+     */
+    Eigen::VectorXi queryConnectivity(Eigen::VectorXi from, Eigen::VectorXi to);
 
     /*
      * addParticle: add a particle at (x, y)
@@ -43,40 +60,43 @@ public:
      */
     Eigen::VectorXi addParticle(double x, double y);
 
-    /*
-     * addSaw: add a saw at (x, y)
-     */
+    /* Add a saw at (x, y) */
     void addSaw(double x, double y);
 
-    /*
-     * queryParticle: locate the particle with specific UID
-     *
-     * Returns: Tuple (particle, valid).
-     *          valid must be false if the particle with given uid cannot be
-     *          found.
-     */
-    std::tuple<Particle, bool>
-    queryParticle(int32_t uid) const
-    {
-        for (const auto& p : particles_)
-            if (p.uid == uid)
-                return std::make_tuple(p, true);
-        return std::make_tuple(Particle(Eigen::Vector2d(0.0, 0.0), -1, false, false), false);
-    }
+    /** Obtain the configuration vector (containing particle X/Y positions). */
+    Eigen::VectorXd configuration_vector() const;
 
+    /** Obtain the configurational velocity vector (parallel to the config vector). */
+    Eigen::VectorXd velocity_vector() const;
 
-    /*
-     * queryConnectivity: Detect whether from(i) is connected with to(i).
-     *
-     * Inputs: VectorXi with particle UIDs
-     * Returns: Eigen::VectorXi. Each element ret(i) represents if Particle
-     *          from(i) connected with Particle to(i).
-     *
-     *          Any none zero value means connected.
-     */
-    Eigen::VectorXi
-    queryConnectivity(Eigen::VectorXi from,
-                      Eigen::VectorXi to);
+    /** Persist the data in a configuration vector. */
+    void persist_configuration(const Eigen::VectorXd& config, const Eigen::VectorXd& velocity);
+
+    /** Compute the force vector (and derivative) for gravity. */
+    Eigen::VectorXd force_gravity(const Eigen::VectorXd& config) const;
+    Eigen::MatrixXd df_gravity(const Eigen::VectorXd& config) const;
+
+    /** Compute the force vector (and derivative) for the springs. */
+    Eigen::VectorXd force_spring(const Eigen::VectorXd& config) const;
+    Eigen::MatrixXd df_spring(const Eigen::VectorXd& config) const;
+
+    /** Compute the force vector and derivative vector for the floor. */
+    Eigen::VectorXd force_floor(const Eigen::VectorXd& config) const;
+    Eigen::MatrixXd df_floor(const Eigen::VectorXd& config) const;
+
+    /** Compute the force vector (and derivative) for the damping force. */
+    Eigen::VectorXd force_damping(const Eigen::VectorXd& config) const;
+    Eigen::MatrixXd df_damping(const Eigen::VectorXd& config) const;
+
+    /** Compute the sparse mass matrix used in the kinetic energy computation. */
+    Eigen::DiagonalMatrix<double, Eigen::Dynamic> mass_matrix() const;
+    Eigen::DiagonalMatrix<double, Eigen::Dynamic> inv_mass_matrix() const;
+
+    /** Computes the force in the given configuration (according to the enabled forces). */
+    Eigen::VectorXd force(const Eigen::VectorXd& config) const;
+
+    /** Computes the derivative of force in the given configuration (according to enabled forces). */
+    Eigen::MatrixXd dforce(const Eigen::VectorXd& config) const;
 
 private:
     int32_t particle_unique_id_;
@@ -88,37 +108,12 @@ private:
     std::vector<BendingStencil> bendingStencils_;
 
     double getTotalParticleMass(int idx) const;
-    int getNumRigidRods() const;
 
-    void buildConfiguration(Eigen::VectorXd& q, Eigen::VectorXd& lambda, Eigen::VectorXd& v);
-    void unbuildConfiguration(const Eigen::VectorXd& q, const Eigen::VectorXd& lambda, const Eigen::VectorXd& v);
-
-    void computeMassInverse(Eigen::SparseMatrix<double>& Minv);
-    void numericalIntegration(Eigen::VectorXd& q, Eigen::VectorXd& lambda, Eigen::VectorXd& v);
-
-    void computeForceAndHessian(const Eigen::VectorXd& q,
-                                const Eigen::VectorXd& qprev,
-                                Eigen::VectorXd& F,
-                                Eigen::SparseMatrix<double>& H);
-    void processGravityForce(Eigen::VectorXd& F);
-    void processBendingForce(const Eigen::VectorXd& q, Eigen::VectorXd& F);
-    void processSpringForce(const Eigen::VectorXd& q, Eigen::VectorXd& F,
-                            std::vector<Eigen::Triplet<double>>& H);
-    void processDampingForce(const Eigen::VectorXd& q,
-                             const Eigen::VectorXd& qprev, Eigen::VectorXd& F,
-                             std::vector<Eigen::Triplet<double>>& H);
-    void processFloorForce(const Eigen::VectorXd& q,
-                           const Eigen::VectorXd& qprev, Eigen::VectorXd& F,
-                           std::vector<Eigen::Triplet<double>>& H);
-
-    double ptSegmentDist(const Eigen::Vector2d& p, const Eigen::Vector2d& q1,
-                         const Eigen::Vector2d& q2);
-    void detectSawedConnectors(std::set<int>& connectorsToDelete);
-    void detectSawedParticles(std::set<int>& particlesToDelete);
-    void deleteSawedObjects();
-    void pruneOverstrainedSprings();
-
-    // TODO: Additional member functions
+    /**
+     * Returns a 2x(2*len(particles)) selection matrix for selecting a given particle.
+     * TODO: Eventually optimize this out.
+     */
+    Eigen::MatrixXd selection_matrix(int index) const;
 };
 
 }

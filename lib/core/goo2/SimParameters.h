@@ -4,8 +4,13 @@
 namespace goo2 {
 
 struct SimParameters {
-    SimParameters()
-    {
+    /** The strength that the floor pushes back against particles. */
+    static constexpr double FLOOR_STRENGTH = 25000.0;
+
+    /** If the position of a particle exceeds this in any dimension, delete it. */
+    static constexpr double SIM_DIMENSION = 5.0;
+
+    SimParameters() {
         timeStep = 0.001;
         NewtonMaxIters = 20;
         NewtonTolerance = 1e-8;
