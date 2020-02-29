@@ -54,17 +54,9 @@ public:
 struct Spring : public Connector {
 public:
     Spring(int p1, int p2, double mass, double stiffness, double restlen, bool canSnap)
-        : Connector(p1, p2, mass)
-        , stiffness(stiffness)
-        , restlen(restlen)
-        , canSnap(canSnap)
-    {
-    }
+        : Connector(p1, p2, mass), stiffness(stiffness), restlen(restlen), canSnap(canSnap) { }
 
-    virtual SimParameters::ConnectorType getType()
-    {
-        return SimParameters::CT_SPRING;
-    }
+    virtual SimParameters::ConnectorType getType() { return SimParameters::CT_SPRING; }
 
     double stiffness;
     double restlen;
@@ -74,16 +66,9 @@ public:
 struct RigidRod : public Connector {
 public:
     RigidRod(int p1, int p2, double mass, double length)
-        : Connector(p1, p2, mass)
-        , lambda(0)
-        , length(length)
-    {
-    }
+        : Connector(p1, p2, mass), lambda(0), length(length) { }
 
-    virtual SimParameters::ConnectorType getType()
-    {
-        return SimParameters::CT_RIGIDROD;
-    }
+    virtual SimParameters::ConnectorType getType() { return SimParameters::CT_RIGIDROD; }
 
     double lambda;
     double length;
@@ -92,10 +77,7 @@ public:
 struct Saw {
 public:
     Saw(Eigen::Vector2d pos, double radius)
-        : pos(pos)
-        , radius(radius)
-    {
-    }
+        : pos(pos), radius(radius) { }
 
     Eigen::Vector2d pos;
     double radius;
@@ -104,12 +86,7 @@ public:
 struct BendingStencil {
 public:
     BendingStencil(int p1, int p2, int p3, double kb)
-        : p1(p1)
-        , p2(p2)
-        , p3(p3)
-        , kb(kb)
-    {
-    }
+        : p1(p1), p2(p2), p3(p3), kb(kb) { }
 
     int p1, p2, p3;
     double kb;

@@ -88,6 +88,10 @@ public:
     Eigen::VectorXd force_damping(const Eigen::VectorXd& config) const;
     Eigen::MatrixXd df_damping(const Eigen::VectorXd& config) const;
 
+    /** Compute the penalty force (and derivative) for rigid rods. */
+    Eigen::VectorXd force_rigid_penalty(const Eigen::VectorXd& config) const;
+    Eigen::MatrixXd df_rigid_penalty(const Eigen::VectorXd& config) const;
+
     /** Compute the sparse mass matrix used in the kinetic energy computation. */
     Eigen::DiagonalMatrix<double, Eigen::Dynamic> mass_matrix() const;
     Eigen::DiagonalMatrix<double, Eigen::Dynamic> inv_mass_matrix() const;
@@ -97,7 +101,6 @@ public:
 
     /** Computes the derivative of force in the given configuration (according to enabled forces). */
     Eigen::MatrixXd dforce(const Eigen::VectorXd& config) const;
-
 private:
     int32_t particle_unique_id_;
     std::shared_ptr<SimParameters> params_;
@@ -113,7 +116,17 @@ private:
      * Returns a 2x(2*len(particles)) selection matrix for selecting a given particle.
      * TODO: Eventually optimize this out.
      */
-    Eigen::MatrixXd selection_matrix(int index) const;
+    Eigen::SparseMatrix<double> selection_matrix(int index) const;
+
+    /** Return the number of rigid rods (for determining # of constraints). */
+    inline int num_rigid_rods() const {
+        int count = 0;
+        for (const auto& conn : this->connectors_) {
+            if (conn->getType() == SimParameters::CT_RIGIDROD) count++;
+        }
+
+        return count;
+    }
 };
 
 }
