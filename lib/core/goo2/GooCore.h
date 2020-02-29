@@ -101,6 +101,12 @@ public:
 
     /** Computes the derivative of force in the given configuration (according to enabled forces). */
     Eigen::MatrixXd dforce(const Eigen::VectorXd& config) const;
+
+    /** Compute the value of the constraint function g(q). */
+    Eigen::VectorXd constraint(const Eigen::VectorXd& config) const;
+    /** Compute the derivative of the constraint function g(q). */
+    Eigen::SparseMatrix<double> df_constraint(const Eigen::VectorXd& config) const;
+
 private:
     int32_t particle_unique_id_;
     std::shared_ptr<SimParameters> params_;

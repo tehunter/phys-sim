@@ -282,38 +282,22 @@ bool GooCore::simulateOneStep() {
                     VectorXd q = input.segment(0, config.size());
                     VectorXd lambda = input.segment(config.size(), num_constraints);
 
-                    SparseMatrix<double> result(input.size(), input.size());
-                    SparseMatrix<double> dg(num_constraints, config.size());
-                    SparseMatrix<double> summation(config.size(), config.size());
-
+                    // Sum the hessian Hg_i over all rigid rods (into 'summation').
                     int index = 0;
+                    SparseMatrix<double> summation(config.size(), config.size());
                     for (const auto& conn : this->connectors_) {
                         if (conn->getType() != SimParameters::CT_RIGIDROD) continue;
 
-                        RigidRod* rod = (RigidRod*) conn;
-                        const Vector2d pos1 = q.segment<2>(2*rod->p1);
-                        const Vector2d pos2 = q.segment<2>(2*rod->p2);
-                        const Vector2d quant = 2 * (pos1 - pos2);
-
-                        /**
-                         * The sparse matrix equivalent of
-                         *  dg.row(index).segment<2>(2*rod->p1) += 2 * (pos1 - pos2);
-                         *  dg.row(index).segment<2>(2*rod->p2) -= 2 * (pos1 - pos2);
-                         */
-
-                        dg.coeffRef(index, 2*rod->p1) += quant[0];
-                        dg.coeffRef(index, 2*rod->p1+1) += quant[1];
-                        dg.coeffRef(index, 2*rod->p2) -= quant[0];
-                        dg.coeffRef(index, 2*rod->p2+1) -= quant[1];
-
+                        const RigidRod* rod = (RigidRod*) conn;
                         SparseMatrix<double> sel1 = this->selection_matrix(rod->p1);
                         SparseMatrix<double> sel2 = this->selection_matrix(rod->p2);
                         SparseMatrix<double> seldiff = sel1 - sel2;
 
                         summation += 2 * lambda(index) * seldiff.transpose() * seldiff;
-
                         index++;
                     }
+
+                    SparseMatrix<double> result(input.size(), input.size());
 
                     // Upper left corner: compute I + M^-1 * Summation
                     // Add identity to the upper part of the result:
@@ -325,6 +309,7 @@ bool GooCore::simulateOneStep() {
                     result += inv_mass_summ;
 
                     // Other two parts: copy dg to (config.size(), 0) & dg transpose to (0, config.size()).
+                    SparseMatrix<double> dg = this->df_constraint(q);
                     for (int k = 0; k < dg.outerSize(); k++) {
                         for (SparseMatrix<double>::InnerIterator it(dg, k); it; ++it) {
                             result.insert(config.size() + it.row(), it.col()) = it.value();
@@ -340,8 +325,27 @@ bool GooCore::simulateOneStep() {
             break;
         }
         case SimParameters::CH_LAGRANGEMULT:
-            // Fancy velocity verlet which just immediately finds a valid constrained solution.
-            // Hamilton's principle is wierd!
+            // Fancy integrator which just immediately finds a valid constrained solution.
+            // Start by computing the next valid configuration; note that we are abusing 'velocity' here,
+            // since this integrator actually uses momentum instead of velocity. Hopefully it still works.
+            next_config = config + h * inv_mass * velocity;
+
+            VectorXd initial = VectorXd::Zero(this->num_rigid_rods());
+            VectorXd base_value = next_config + h * inv_mass * velocity + h * h * inv_mass * this->force(next_config);
+            SparseMatrix<double> dg = this->df_constraint(next_config);
+
+            VectorXd lambda = newtonsSparse(initial, params_->NewtonMaxIters, params_->NewtonTolerance,
+                [&](const VectorXd& input) {
+                    return this->constraint(base_value + h * h * inv_mass * dg.transpose() * input);
+                },
+                [&](const VectorXd& input) {
+                    SparseMatrix<double> partial = h * h * inv_mass * dg.transpose();
+                    SparseMatrix<double> result = this->df_constraint(base_value + partial * input) * partial;
+                    return result;
+                });
+
+            // Now we compute the next lambda using the current lambda.
+            next_velocity = velocity + h * this->force(next_config) + h * dg.transpose() * lambda;
             break;
     }
 
@@ -751,6 +755,54 @@ MatrixXd GooCore::dforce(const VectorXd& config) const {
     }
 
     return result;
+}
+
+/** Compute the value of the constraint function g(q). */
+VectorXd GooCore::constraint(const Eigen::VectorXd& config) const {
+    VectorXd result = VectorXd::Zero(this->num_rigid_rods());
+    int index = 0;
+    for (const auto& conn : this->connectors_) {
+        if (conn->getType() != SimParameters::CT_RIGIDROD) continue;
+
+        RigidRod* rod = (RigidRod*) conn;
+        const Vector2d pos1 = config.segment<2>(2*rod->p1);
+        const Vector2d pos2 = config.segment<2>(2*rod->p2);
+
+        result(index) = (pos1 - pos2).squaredNorm() - rod->length * rod->length;
+        index++;
+    }
+
+    return result;
+}
+
+/** Compute the derivative of the constraint function g(q). */
+SparseMatrix<double> GooCore::df_constraint(const Eigen::VectorXd& config) const {
+    int num_constraints = this->num_rigid_rods();
+    SparseMatrix<double> dg(num_constraints, config.size());
+    int index = 0;
+    for (const auto& conn : this->connectors_) {
+        if (conn->getType() != SimParameters::CT_RIGIDROD) continue;
+
+        RigidRod* rod = (RigidRod*) conn;
+        const Vector2d pos1 = config.segment<2>(2*rod->p1);
+        const Vector2d pos2 = config.segment<2>(2*rod->p2);
+        const Vector2d quant = 2 * (pos1 - pos2);
+
+        /**
+        * The sparse matrix equivalent of
+        *  dg.row(index).segment<2>(2*rod->p1) += 2 * (pos1 - pos2);
+        *  dg.row(index).segment<2>(2*rod->p2) -= 2 * (pos1 - pos2);
+        */
+
+        dg.coeffRef(index, 2*rod->p1) += quant[0];
+        dg.coeffRef(index, 2*rod->p1+1) += quant[1];
+        dg.coeffRef(index, 2*rod->p2) -= quant[0];
+        dg.coeffRef(index, 2*rod->p2+1) -= quant[1];
+
+        index++;
+    }
+
+    return dg;
 }
 
 /** Utility method for creating a selection matrix so I don't go insane. */
