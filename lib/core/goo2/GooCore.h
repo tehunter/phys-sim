@@ -74,23 +74,21 @@ public:
 
     /** Compute the force vector (and derivative) for gravity. */
     Eigen::VectorXd force_gravity(const Eigen::VectorXd& config) const;
-    Eigen::MatrixXd df_gravity(const Eigen::VectorXd& config) const;
 
     /** Compute the force vector (and derivative) for the springs. */
     Eigen::VectorXd force_spring(const Eigen::VectorXd& config) const;
-    Eigen::MatrixXd df_spring(const Eigen::VectorXd& config) const;
 
     /** Compute the force vector and derivative vector for the floor. */
     Eigen::VectorXd force_floor(const Eigen::VectorXd& config) const;
-    Eigen::MatrixXd df_floor(const Eigen::VectorXd& config) const;
 
     /** Compute the force vector (and derivative) for the damping force. */
     Eigen::VectorXd force_damping(const Eigen::VectorXd& config) const;
-    Eigen::MatrixXd df_damping(const Eigen::VectorXd& config) const;
 
     /** Compute the penalty force (and derivative) for rigid rods. */
     Eigen::VectorXd force_rigid_penalty(const Eigen::VectorXd& config) const;
-    Eigen::MatrixXd df_rigid_penalty(const Eigen::VectorXd& config) const;
+
+    /** Compute the bending force for elastic rods. */
+    Eigen::VectorXd force_bending(const Eigen::VectorXd& config) const;
 
     /** Compute the sparse mass matrix used in the kinetic energy computation. */
     Eigen::DiagonalMatrix<double, Eigen::Dynamic> mass_matrix() const;
@@ -98,9 +96,6 @@ public:
 
     /** Computes the force in the given configuration (according to the enabled forces). */
     Eigen::VectorXd force(const Eigen::VectorXd& config) const;
-
-    /** Computes the derivative of force in the given configuration (according to enabled forces). */
-    Eigen::MatrixXd dforce(const Eigen::VectorXd& config) const;
 
     /** Compute the value of the constraint function g(q). */
     Eigen::VectorXd constraint(const Eigen::VectorXd& config) const;
@@ -116,6 +111,7 @@ private:
     std::vector<Saw> saws_;
     std::vector<BendingStencil> bendingStencils_;
 
+    /** Get the total mass of a particle, including any mass that it's connectors contribute. */
     double getTotalParticleMass(int idx) const;
 
     /**
@@ -123,6 +119,15 @@ private:
      * TODO: Eventually optimize this out.
      */
     Eigen::SparseMatrix<double> selection_matrix(int index) const;
+
+    /** Returns a vector containing the mass for each particle (parallel to particles_). */
+    Eigen::VectorXd particle_masses() const;
+
+    /** Return true if the line segment overlaps a saw, and false otherwise. */
+    bool overlaps_saw(Eigen::Vector2d pos1, Eigen::Vector2d pos2) const;
+
+    /** Return true if the given point overlaps a saw, and false otherwise. */
+    bool overlaps_saw(Eigen::Vector2d point) const;
 
     /** Return the number of rigid rods (for determining # of constraints). */
     inline int num_rigid_rods() const {

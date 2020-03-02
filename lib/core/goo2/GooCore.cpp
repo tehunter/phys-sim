@@ -4,6 +4,8 @@
 #include <Eigen/SparseQR>
 #include <algorithm>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 #include <iostream>
 
 using namespace Eigen;
@@ -43,6 +45,23 @@ double segment_distance(Vector2d v, Vector2d w, Vector2d p) {
 
     const Vector2d point = w + t * (v - w);
     return (point - p).norm();
+}
+
+/** Compute the cross product of two 2d vectors (by assuming z = 0). */
+Vector3d cross2d(Vector2d a, Vector2d b) {
+    Vector3d a3(a(0), a(1), 0.0);
+    Vector3d b3(b(0), b(1), 0.0);
+
+    return a3.cross(b3);
+}
+
+Vector2d cross2dWithZ(Vector2d input) {
+    Vector3d input3(input(0), input(1), 0.0);
+    Vector3d z(0, 0, 1.0);
+
+    Vector3d result = input3.cross(z);
+    Vector2d result2(result(0), result(1));
+    return result2;
 }
 
 GooCore::GooCore() {
@@ -229,7 +248,6 @@ void GooCore::initSimulation() {
 bool GooCore::simulateOneStep() {
     VectorXd config = this->configuration_vector();
     VectorXd velocity = this->velocity_vector();
-    DiagonalMatrix<double, Dynamic> mass = this->mass_matrix();
     DiagonalMatrix<double, Dynamic> inv_mass = this->inv_mass_matrix();
     double h = params_->timeStep;
 
@@ -308,13 +326,17 @@ bool GooCore::simulateOneStep() {
                     inv_mass_summ.resize(input.size(), input.size());
                     result += inv_mass_summ;
 
-                    // Other two parts: copy dg to (config.size(), 0) & dg transpose to (0, config.size()).
+                    // Other two parts: copy dg to (config.size(), 0) & M^-1 * dg transpose to (0, config.size()).
                     SparseMatrix<double> dg = this->df_constraint(q);
                     for (int k = 0; k < dg.outerSize(); k++) {
-                        for (SparseMatrix<double>::InnerIterator it(dg, k); it; ++it) {
+                        for (SparseMatrix<double>::InnerIterator it(dg, k); it; ++it)
                             result.insert(config.size() + it.row(), it.col()) = it.value();
-                            result.insert(it.col(), config.size() + it.row()) = it.value();
-                        }
+                    }
+
+                    SparseMatrix<double> mdg = inv_mass * dg.transpose();
+                    for (int k = 0; k < mdg.outerSize(); k++) {
+                        for (SparseMatrix<double>::InnerIterator it(mdg, k); it; ++it)
+                            result.insert(it.row(), config.size() + it.col()) = it.value();
                     }
 
                     return result;
@@ -352,101 +374,193 @@ bool GooCore::simulateOneStep() {
     // Save the timestep so it shows up in the render.
     this->persist_configuration(next_config, next_velocity);
 
-    // Now delete any connectors which are too strained or are overlapping a saw.
-    for (ssize_t index = this->connectors_.size() - 1; index >= 0; index--) {
+    /** Bulk deletion of any particles, connectors, or bending stencils which go out of bounds or overlap a saw. */
+    // Sets containing indices of deleted particles, connectors, and bending stencils.
+    std::unordered_set<size_t> dpart, dconn, dbending;
+
+    // Start by collecting all of the particles which are out of bounds or overlapping a saw.
+    for (size_t index = 0; index < this->particles_.size(); index++) {
+        Vector2d pos = this->particles_[index].pos;
+        bool in_bounds = std::abs(pos[0]) <= SimParameters::SIM_DIMENSION && std::abs(pos[1]) <= SimParameters::SIM_DIMENSION;
+        
+        if (!in_bounds || this->overlaps_saw(pos)) dpart.insert(index);
+    }
+
+    // Now collect all connectors which have a deleted particle, or are overlapping a saw, or are overstrained.
+    for (size_t index = 0; index < this->connectors_.size(); index++) {
         Connector* conn = this->connectors_[index];
+
+        // Delete connectors connected to a deleted particle.
+        if (dpart.count(conn->p1) || dpart.count(conn->p2)) {
+            dconn.insert(index);
+            continue;
+        }
 
         // Handle springs which are overstrained.
         if (conn->getType() == SimParameters::ConnectorType::CT_SPRING) {
             Spring* spring = (Spring*) conn;
+
             double distance = (this->particles_[spring->p1].pos - this->particles_[spring->p2].pos).norm();
             double strain = (distance - spring->restlen) / spring->restlen;
 
-            // If the spring is strained, delete it.
-            if (strain > this->params_->maxSpringStrain) {
-                this->connectors_.erase(this->connectors_.begin() + index);
+            if (spring->canSnap && strain > this->params_->maxSpringStrain) {
+                dconn.insert(index);
                 continue;
             }
         }
 
-        // TODO: Remove any associated bending stencils.
-
-        // Check if connector overlaps a saw, if so then delete it.
-        const Vector2d pos1 = this->particles_[conn->p1].pos;
-        const Vector2d pos2 = this->particles_[conn->p2].pos;
-
-        for (ssize_t si = this->saws_.size() - 1; si >= 0; si--) {
-            if (segment_distance(pos1, pos2, this->saws_[si].pos) <= this->saws_[si].radius) {
-                this->connectors_.erase(this->connectors_.begin() + index);
-                break;
-            }
-        }
+        // Finally, check if connector overlaps a saw, if so then delete it.
+        if (this->overlaps_saw(this->particles_[conn->p1].pos, this->particles_[conn->p2].pos)) dconn.insert(index);
     }
 
-    // Delete particles which are overlapping a saw or which go out of bounds.
-    for (ssize_t index = this->particles_.size() - 1; index >= 0; index--) {
-        Vector2d pos = this->particles_[index].pos;
-        // TODO: Ignore particle radius due to it failing tests, would like to consider it though.
-        // double radius = 0.02 * sqrt(this->getTotalParticleMass(index));
-        bool in_bounds = std::abs(pos[0]) <= SimParameters::SIM_DIMENSION && std::abs(pos[1]) <= SimParameters::SIM_DIMENSION;
-        bool in_saw = false;
-        for (ssize_t si = this->saws_.size() - 1; si >= 0; si--) {
-            if ((this->saws_[si].pos - pos).norm() < this->saws_[si].radius /* + radius */) {
-                in_saw = true;
-                break;
-            }
-        }
-
-        // This particle is safe, for now...
-        if (in_bounds && !in_saw) continue;
-
-        // Delete all connectors connected to this particle; shift the indexes of other connectors.
-        this->particles_.erase(this->particles_.begin() + index);
-        for (ssize_t ci = this->connectors_.size() - 1; ci >= 0; ci--) {
-            Connector* conn = this->connectors_[ci];
-
-            // Delete connectors connected to the particle.
-            if (conn->p1 == index || conn->p2 == index) {
-                this->connectors_.erase(this->connectors_.begin() + ci);
-                continue;
-            }
-
-            // Shift the indexes of connectors not connected to the particle by one.
-            if (conn->p1 >= index) conn->p1--;
-            if (conn->p2 >= index) conn->p2--;
-        }
+    // And finally collect all bending stencils connected to a deleted particle or spring.
+    for (size_t index : dconn) {
+        for (int bending : this->connectors_[index]->associatedBendingStencils) dbending.insert(bending);
     }
+
+    // Early return if we don't need to delete anything.
+    if (dpart.size() == 0 && dconn.size() == 0 && dbending.size() == 0) return false;
+    // TODO: Simpler logic if only connectors have been deleted, since reindexing is not required.
+
+    // Vectors which map old particle indices -> new particle indices, and same for bending stencils.
+    std::vector<size_t> ipart(this->particles_.size()), ibending(this->bendingStencils_.size());
+    size_t valid_index = 0;
+    for (size_t index = 0; index < this->particles_.size(); index++) {
+        if (dpart.count(index)) ipart[index] = -1;
+        else ipart[index] = valid_index++;
+    }
+
+    valid_index = 0;
+    for (size_t index = 0; index < this->bendingStencils_.size(); index++) {
+        if (dbending.count(index)) ibending[index] = -1;
+        else ibending[index] = valid_index++;
+    }
+
+    // Now construct new vectors of particles, connectors, and bending stencils.
+    std::vector<Particle, Eigen::aligned_allocator<Particle>> new_particles;
+    new_particles.reserve(this->particles_.size() - dpart.size());
+    for (size_t index = 0; index < this->particles_.size(); index++) {
+        if (ipart[index] == -1) continue;
+        new_particles.push_back(this->particles_[index]);
+    }
+
+    std::vector<Connector*> new_connectors;
+    new_connectors.reserve(this->connectors_.size() - dconn.size());
+    for (size_t index = 0; index < this->connectors_.size(); index++) {
+        if (dconn.count(index)) continue;
+
+        Connector* conn = this->connectors_[index];
+        // Update connector particle indexes, as well as bending stencil indexes.
+        conn->p1 = ipart[conn->p1];
+        conn->p2 = ipart[conn->p2];
+
+        std::set<int> new_stencils;
+        for (int old_bending : conn->associatedBendingStencils) {
+            if (ibending[old_bending] == -1) continue;
+            new_stencils.insert(ibending[old_bending]);
+        }
+        conn->associatedBendingStencils = std::move(new_stencils);
+
+        new_connectors.push_back(conn);
+    }
+
+    std::vector<BendingStencil> new_bending;
+    new_bending.reserve(this->bendingStencils_.size() - dbending.size());
+    for (size_t index = 0; index < this->bendingStencils_.size(); index++) {
+        if (ibending[index] == -1) continue;
+        BendingStencil stencil = this->bendingStencils_[index];
+        stencil.p1 = ipart[stencil.p1];
+        stencil.p2 = ipart[stencil.p2];
+        stencil.p3 = ipart[stencil.p3];
+
+        new_bending.push_back(stencil);
+    }
+
+    this->particles_ = std::move(new_particles);
+    this->connectors_ = std::move(new_connectors);
+    this->bendingStencils_ = std::move(new_bending);
+    return false;
 }
 
 VectorXi GooCore::addParticle(double x, double y) {
-    Vector2d newpos(x,y);
-    double mass = params_->particleMass;
+    int new_index = particles_.size();
+    int new_id = particle_unique_id_++;
+    Vector2d new_position(x,y);
 
-    int newid = particles_.size();
-    int ret = particle_unique_id_++;
-    particles_.emplace_back(newpos, mass, params_->particleFixed, false, ret);
+    double mass = params_->particleFixed ? std::numeric_limits<double>::infinity() : params_->particleMass;
+    particles_.emplace_back(new_position, mass, params_->particleFixed, false, new_id);
+
+    // Elastic rods create multiple particles, so we collect all of their indexes and return them here.
+    std::vector<int> ret_ids;
+    ret_ids.push_back(new_id);
 
     // Iterate through all other particles to find particles within the max spring dist.
     for(int index = 0; index < particles_.size(); index++) {
-        if (index == newid) continue;
-        double distance = (particles_[index].pos - newpos).norm();
+        if (index == new_index) continue;
+        if (particles_[index].inert) continue;
+
+        Vector2d target_position = particles_[index].pos;
+        double distance = (target_position - new_position).norm();
         if (distance >= params_->maxSpringDist) continue;
 
         // TODO: Spring mass and can snap?
         switch (params_->connectorType) {
             case SimParameters::ConnectorType::CT_SPRING:
-                connectors_.push_back(new Spring(newid, index, 0.0, params_->springStiffness / distance, distance, true));
+                connectors_.push_back(new Spring(new_index, index, 0.0, params_->springStiffness / distance, distance, true));
                 break;
             case SimParameters::ConnectorType::CT_RIGIDROD:
-                connectors_.push_back(new RigidRod(newid, index, 0.0, distance));
+                connectors_.push_back(new RigidRod(new_index, index, 0.0, distance));
                 break;
-            default:
+            default: {
+                // Create <num_segments> - 1 intermediate particles.
+                std::vector<Vector2d> positions;
+                positions.reserve(params_->rodSegments + 1);
+                std::vector<int> indexes;
+                indexes.reserve(params_->rodSegments + 1);
+                positions.push_back(new_position);
+                indexes.push_back(new_index);
+
+                for (int np = 0; np < params_->rodSegments - 1; np++) {
+                    int partial_new_id = particle_unique_id_++;
+                    int partial_new_index = particles_.size();
+                    Vector2d partial_position = new_position + (target_position - new_position) / params_->rodSegments * (np+1);
+                    particles_.emplace_back(partial_position, 0.0, false, true, partial_new_id);
+
+                    // Add this particle to the return, as well as intermediate tracking stuff.
+                    ret_ids.push_back(partial_new_id);
+                    indexes.push_back(partial_new_index);
+                    positions.push_back(partial_position);
+                }
+
+                indexes.push_back(index);
+                positions.push_back(target_position);
+
+                // Add connectors to pairwise elements, and bending stencils to the associated connectors.
+                std::vector<Connector*> created_conns;
+                for (int i = 0; i < indexes.size() - 1; i++) {
+                    double distance = (positions[i] - positions[i + 1]).norm();
+                    connectors_.push_back(new Spring(indexes[i], indexes[i+1], distance * params_->rodDensity,
+                        params_->rodStretchingStiffness / distance, distance, false));
+                    created_conns.push_back(connectors_[connectors_.size() - 1]);
+                }
+
+                // Add bending stencils to triples of elements.
+                for (int i = 0; i < indexes.size() - 2; i++) {
+                    double d1 = (positions[i] - positions[i + 1]).norm();
+                    double d2 = (positions[i + 1] - positions[i + 2]).norm();
+
+                    bendingStencils_.emplace_back(indexes[i], indexes[i+1], indexes[i+2], 2*params_->rodBendingStiffness / (d1 + d2));
+                    created_conns[i]->associatedBendingStencils.insert(bendingStencils_.size()-1);
+                    created_conns[i+1]->associatedBendingStencils.insert(bendingStencils_.size()-1);
+                }
+
                 break;
+            }
         }
     }
 
-    VectorXi result(1);
-    result(0) = ret;
+    VectorXi result(ret_ids.size());
+    for (int i = 0; i < ret_ids.size(); i++) result(i) = ret_ids[i];
     return result;
 }
 
@@ -465,7 +579,7 @@ double GooCore::getTotalParticleMass(int idx) const {
 }
 
 VectorXi GooCore::queryConnectivity(VectorXi from, VectorXi to) {
-    VectorXi result(from.size());
+    VectorXi result = VectorXi::Zero(from.size());
     std::unordered_map<int, int> uid2index;
     for (size_t i = 0; i < particles_.size(); i++)
         uid2index[particles_[i].uid] = static_cast<int>(i);
@@ -521,9 +635,10 @@ void GooCore::persist_configuration(const VectorXd& config, const VectorXd& velo
 DiagonalMatrix<double, Dynamic> GooCore::mass_matrix() const {
     // Just place masses along the diagonal.
     DiagonalMatrix<double, Dynamic> matrix(2*particles_.size());
+    VectorXd masses = this->particle_masses();
     for (size_t i = 0; i < particles_.size(); i++) {
-        matrix.diagonal()[2*i] = particles_[i].mass;
-        matrix.diagonal()[2*i+1] = particles_[i].mass;
+        matrix.diagonal()[2*i] = masses(i);
+        matrix.diagonal()[2*i+1] = masses(i);
     }
 
     return matrix;
@@ -531,14 +646,15 @@ DiagonalMatrix<double, Dynamic> GooCore::mass_matrix() const {
 
 DiagonalMatrix<double, Dynamic> GooCore::inv_mass_matrix() const {
     // The inverse of a diagonal matrix is the elementwise reciprocal.
+    VectorXd masses = this->particle_masses();
     DiagonalMatrix<double, Dynamic> matrix(2*particles_.size());
     for (size_t i = 0; i < particles_.size(); i++) {
         if (particles_[i].fixed) {
             matrix.diagonal()[2*i] = 0.0;
             matrix.diagonal()[2*i+1] = 0.0;
         } else {
-            matrix.diagonal()[2*i] = 1.0/particles_[i].mass;
-            matrix.diagonal()[2*i+1] = 1.0/particles_[i].mass;
+            matrix.diagonal()[2*i] = 1.0/masses(i);
+            matrix.diagonal()[2*i+1] = 1.0/masses(i);
         }
     }
 
@@ -548,17 +664,14 @@ DiagonalMatrix<double, Dynamic> GooCore::inv_mass_matrix() const {
 VectorXd GooCore::force_gravity(const VectorXd& config) const {
     // TODO: Consider passing in the particle masses seperately.
     // Gravity is a constant force downward in the Y direction.
+    VectorXd masses = this->particle_masses();
     VectorXd result = VectorXd::Zero(config.size());
     for (int i = 1; i < config.size(); i += 2) {
-        result[i] = params_->gravityG * particles_[(i - 1)/2].mass;
+        if (particles_[(i - 1)/2].fixed) continue;
+        result(i) = params_->gravityG * masses((i - 1)/2);
     }
-    
-    return result;
-}
 
-MatrixXd GooCore::df_gravity(const VectorXd& config) const {
-    // Amusingly, the second derivative of gravity potential energy is 0...
-    return MatrixXd::Zero(config.size(), config.size());
+    return result;
 }
 
 /** Compute the force vector for the springs. */
@@ -582,57 +695,18 @@ VectorXd GooCore::force_spring(const VectorXd& config) const {
     return result;
 }
 
-/** compute the derivative of the force vector for springs. */
-MatrixXd GooCore::df_spring(const VectorXd& config) const {
-    // This is going to be an ugly one...
-    MatrixXd result = MatrixXd::Zero(config.size(), config.size());
-    for (auto conn : this->connectors_) {
-        if (conn->getType() != SimParameters::ConnectorType::CT_SPRING) continue;
-
-        const Spring* spring = (Spring*) conn;
-        const Vector2d pos1 = config.segment<2>(2*spring->p1);
-        const Vector2d pos2 = config.segment<2>(2*spring->p2);
-        const Vector2d diff = pos1 - pos2;
-        double dist = std::max(1e-6, diff.norm());
-        const Vector2d hdiff = diff / dist;
-
-        // Explicitly using selection matrices since the math makes me sad otherwise. :(
-        SparseMatrix<double> p1s = this->selection_matrix(spring->p1);
-        SparseMatrix<double> p2s = this->selection_matrix(spring->p2);
-
-        result -= spring->stiffness * (dist - spring->restlen) / dist * (p1s - p2s).transpose() * (p1s - p2s);
-        result -= spring->stiffness * (p1s - p2s).transpose() * (pos1 - pos2)
-            * (hdiff.transpose() / dist - hdiff.transpose() * (dist - spring->restlen) / (dist * dist)) * (p1s - p2s);
-    }
-
-    return result;
-}
-
 VectorXd GooCore::force_floor(const VectorXd& config) const {
     // A simple quadratic potential/linear force which dissuades particles from going below the floor too long.
     VectorXd result = VectorXd::Zero(config.size());
+    VectorXd masses = this->particle_masses();
     for (int i = 1; i < config.size(); i += 2) {
         if (particles_[(i - 1)/2].fixed) continue;
-        double pradius = 0.02 * sqrt(this->getTotalParticleMass((i-1)/2));
+        double pradius = 0.02 * sqrt(masses((i - 1)/2));
         double pbottom = config[i] - pradius;
         if (pbottom > -0.5) continue;
 
         double offset = (-0.50 - pbottom);
         result[i] = SimParameters::FLOOR_STRENGTH * offset;
-    }
-    
-    return result;
-}
-
-MatrixXd GooCore::df_floor(const VectorXd& config) const {
-    MatrixXd result = MatrixXd::Zero(config.size(), config.size());
-    for (int i = 1; i < config.size(); i += 2) {
-        if (particles_[(i - 1)/2].fixed) continue;
-        double pradius = 0.02 * sqrt(this->getTotalParticleMass((i-1)/2));
-        double pbottom = config[i] - pradius;
-        if (pbottom > -0.5) continue;
-
-        result(i, i) = -SimParameters::FLOOR_STRENGTH;
     }
     
     return result;
@@ -659,24 +733,6 @@ VectorXd GooCore::force_damping(const Eigen::VectorXd& config) const {
     return result;
 }
 
-MatrixXd GooCore::df_damping(const Eigen::VectorXd& config) const {
-    MatrixXd result = MatrixXd::Zero(config.size(), config.size());
-    for (auto conn : this->connectors_) {
-        if (conn->getType() != SimParameters::ConnectorType::CT_SPRING) continue;
-
-        const Spring* spring = (Spring*) conn;
-
-        double k = this->params_->dampingStiffness, h = this->params_->timeStep;
-
-        SparseMatrix<double> sel1 = this->selection_matrix(spring->p1);
-        SparseMatrix<double> sel2 = this->selection_matrix(spring->p2);
-
-        result += -k/h * (sel1 - sel2).transpose() * (sel1 - sel2);
-    }
-
-    return result;
-}
-
 /** Compute the penalty force (and derivative) for rigid rods. */
 VectorXd GooCore::force_rigid_penalty(const VectorXd& config) const {
     VectorXd result = VectorXd::Zero(config.size());
@@ -697,22 +753,27 @@ VectorXd GooCore::force_rigid_penalty(const VectorXd& config) const {
     return result;
 }
 
-MatrixXd GooCore::df_rigid_penalty(const VectorXd& config) const {
-    MatrixXd result = MatrixXd::Zero(config.size(), config.size());
-    for (auto conn : this->connectors_) {
-        if (conn->getType() != SimParameters::ConnectorType::CT_RIGIDROD) continue;
+/** Compute the elastic bending force */
+VectorXd GooCore::force_bending(const VectorXd& config) const {
+    VectorXd result = VectorXd::Zero(config.size());
+    for (const auto& bending : this->bendingStencils_) {
+        const Vector2d pi = config.segment<2>(2*bending.p1);
+        const Vector2d pj = config.segment<2>(2*bending.p2);
+        const Vector2d pk = config.segment<2>(2*bending.p3);
 
-        const RigidRod* rod = (RigidRod*) conn;
-        const Vector2d pos1 = config.segment<2>(2*rod->p1);
-        const Vector2d pos2 = config.segment<2>(2*rod->p2);
-        double constraint = (pos1 - pos2).squaredNorm() - rod->length * rod->length;
+        Vector2d u = (pj - pi), v = (pk - pj);
 
-        SparseMatrix<double> sel1 = this->selection_matrix(rod->p1);
-        SparseMatrix<double> sel2 = this->selection_matrix(rod->p2);
-        SparseMatrix<double> seldiff = sel1 - sel2;
+        // u = p_j - p_i, v = p_k - p_j
+        // theta = 2atan2((u cross v) * z_hat, norm(u)norm(v)+(u dot v))
+        float theta = 2 * std::atan2(cross2d(u,v)[2], u.norm()*v.norm() + u.dot(v));
 
-        result += -4 * params_->penaltyStiffness * seldiff.transpose()
-            * (seldiff * constraint + 2 * (pos1 - pos2) * (pos1 - pos2).transpose() * seldiff);
+        Vector2d fi = bending.kb * theta * cross2dWithZ(u).transpose() / u.squaredNorm();
+        Vector2d fk = bending.kb * theta * cross2dWithZ(v).transpose() / v.squaredNorm();
+        Vector2d fj = -fi - fk;
+
+        result.segment<2>(2*bending.p1) += fi;
+        result.segment<2>(2*bending.p2) += fj;
+        result.segment<2>(2*bending.p3) += fk;
     }
 
     return result;
@@ -727,31 +788,11 @@ VectorXd GooCore::force(const VectorXd& config) const {
     if (params_->dampingEnabled) result += this->force_damping(config);
     if (params_->constraintHandling == SimParameters::CH_PENALTY)
         result += this->force_rigid_penalty(config);
+    if (params_->bendingEnabled) result += this->force_bending(config);
 
     // Clear forces on fixed particles.
     for (int i = 0; i < particles_.size(); i++) {
         if (particles_[i].fixed) result.segment<2>(2*i) = Vector2d::Zero();
-    }
-
-    return result;
-}
-
-/** Computes the derivative of force in the given configuration (according to enabled forces). */
-MatrixXd GooCore::dforce(const VectorXd& config) const {
-    MatrixXd result = MatrixXd::Zero(config.size(), config.size());
-    if (params_->gravityEnabled) result += this->df_gravity(config);
-    if (params_->springsEnabled) result += this->df_spring(config);
-    if (params_->floorEnabled) result += this->df_floor(config);
-    if (params_->dampingEnabled) result += this->df_damping(config);
-    if (params_->constraintHandling == SimParameters::CH_PENALTY)
-        result += this->df_rigid_penalty(config);
-
-    // Clear forces on fixed particles.
-    for (int i = 0; i < particles_.size(); i++) {
-        if (particles_[i].fixed) {
-            result.block(2*i, 0, 2, config.size()).setZero();
-            result.block(0, 2*i, config.size(), 2).setZero();
-        }
     }
 
     return result;
@@ -811,6 +852,38 @@ SparseMatrix<double> GooCore::selection_matrix(int index) const {
     result.insert(0, 2*index) = 1.0;
     result.insert(1, 2*index+1) = 1.0;
     return result;
+}
+
+/** Compute the masses for all particles efficiently in one iteration over the connectors. */
+VectorXd GooCore::particle_masses() const {
+    VectorXd result(particles_.size());
+    for (int index = 0; index < particles_.size(); index++)
+        result(index) = particles_[index].mass;
+    
+    for (auto& conn : connectors_) {
+        result(conn->p1) += conn->mass/2;
+        result(conn->p2) += conn->mass/2;
+    }
+
+    return result;
+}
+
+/** Return true if the line segment overlaps a saw, and false otherwise. */
+bool GooCore::overlaps_saw(Vector2d pos1, Vector2d pos2) const {
+    for (size_t si = 0; si < this->saws_.size(); si++) {
+        if (segment_distance(pos1, pos2, this->saws_[si].pos) <= this->saws_[si].radius) return true;
+    }
+
+    return false;
+}
+
+/** Return true if the given point overlaps a saw, and false otherwise. */
+bool GooCore::overlaps_saw(Vector2d point) const {
+    for (size_t si = 0; si < this->saws_.size(); si++) {
+        if ((this->saws_[si].pos - point).norm() < this->saws_[si].radius) return true;
+    }
+
+    return false;
 }
 
 }

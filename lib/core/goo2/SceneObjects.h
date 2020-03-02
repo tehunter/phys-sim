@@ -12,13 +12,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
     Particle(Eigen::Vector2d pos, double mass, bool isFixed, bool isInert, int32_t uid)
-        : pos(pos)
-        , prevpos(pos)
-        , mass(mass)
-        , fixed(isFixed)
-        , inert(isInert)
-        , uid(uid)
-    {
+        : pos(pos), prevpos(pos), mass(mass), fixed(isFixed), inert(isInert), uid(uid) {
         vel.setZero();
     }
 
