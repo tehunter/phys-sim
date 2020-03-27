@@ -1,5 +1,6 @@
 #include "GooCore.h" 
 #include <stdint.h>
+#include <algorithm>
 #include <iostream>
 
 #include <Eigen/SparseCore>
