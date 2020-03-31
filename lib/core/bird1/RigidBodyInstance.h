@@ -5,12 +5,13 @@
 #include <list>
 #include <vector>
 
+#include "RigidBodyTemplate.h"
+
 namespace bird1 {
 
 class RigidBodyTemplate;
 
-class RigidBodyInstance
-{
+class RigidBodyInstance {
 public:
     RigidBodyInstance(const RigidBodyTemplate &rbtemplate,
                       const Eigen::Vector3d &c,
@@ -29,6 +30,8 @@ public:
     double density;
     
     const RigidBodyTemplate &getTemplate() const {return rbtemplate_;}
+
+    inline double mass() { return density * this->getTemplate().getVolume(); }
     
     int32_t bid;
 private:

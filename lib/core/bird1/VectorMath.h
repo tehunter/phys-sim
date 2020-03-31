@@ -3,8 +3,7 @@
 
 #include <Eigen/Core>
 
-class VectorMath
-{
+class VectorMath {
 public:
     static const Eigen::Matrix3d crossProductMatrix(const Eigen::Vector3d &v);
     static const Eigen::Matrix3d rotationMatrix(const Eigen::Vector3d &axisAngle);

@@ -1,4 +1,4 @@
-# Goo - Milestone 2
+# Furious Birds - Milestone 1
 Michael "Tres" Brenan (mb45487), John Herrick (jrh5735)
 
 ## Build Instructions
@@ -18,4 +18,4 @@ None for this project.
 
 ## Features
 
-Everything should be working as expected.
+Everything should be working as expected, I hope.

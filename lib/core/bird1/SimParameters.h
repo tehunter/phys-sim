@@ -3,10 +3,8 @@
 
 namespace bird1 {
 
-struct SimParameters
-{
-    SimParameters()
-    {
+struct SimParameters {
+    SimParameters() {
         timeStep = 0.001;
         NewtonMaxIters = 20;
         NewtonTolerance = 1e-8;

@@ -5,8 +5,7 @@
 
 using namespace Eigen;
 
-const Matrix3d VectorMath::crossProductMatrix(const Eigen::Vector3d &v)
-{
+const Matrix3d VectorMath::crossProductMatrix(const Vector3d &v) {
     Matrix3d result;
     result << 0, -v[2], v[1],
             v[2], 0, -v[0],
@@ -14,8 +13,7 @@ const Matrix3d VectorMath::crossProductMatrix(const Eigen::Vector3d &v)
     return result;
 }
 
-const Matrix3d VectorMath::rotationMatrix(const Vector3d &axisAngle)
-{
+const Matrix3d VectorMath::rotationMatrix(const Vector3d &axisAngle) {
     double theta = axisAngle.norm();
     Vector3d thetahat = axisAngle/theta;
 
@@ -28,13 +26,11 @@ const Matrix3d VectorMath::rotationMatrix(const Vector3d &axisAngle)
     return result;
 }
 
-double VectorMath::randomUnitIntervalReal()
-{
+double VectorMath::randomUnitIntervalReal() {
     return double(rand())/double(RAND_MAX);
 }
 
-const Vector3d VectorMath::axisAngle(const Matrix3d &rotationMatrix)
-{
+const Vector3d VectorMath::axisAngle(const Matrix3d &rotationMatrix) {
     Matrix3d I;
     I.setIdentity();
     Matrix3d RminusI = rotationMatrix - I;
@@ -48,14 +44,11 @@ const Vector3d VectorMath::axisAngle(const Matrix3d &rotationMatrix)
     return theta*axis;
 }
 
-const Vector3d VectorMath::perpToAxis(const Vector3d &v)
-{
+const Vector3d VectorMath::perpToAxis(const Vector3d &v) {
     int mincoord = 0;
     double minval = std::numeric_limits<double>::infinity();
-    for(int i=0; i<3; i++)
-    {
-        if(fabs(v[i]) < minval)
-        {
+    for(int i=0; i<3; i++) {
+        if(fabs(v[i]) < minval) {
             mincoord = i;
             minval = fabs(v[i]);
         }
@@ -67,8 +60,7 @@ const Vector3d VectorMath::perpToAxis(const Vector3d &v)
     return result;
 }
 
-const Matrix3d VectorMath::TMatrix(const Vector3d &v)
-{
+const Matrix3d VectorMath::TMatrix(const Vector3d &v) {
     double vnormsq = v.dot(v);    
     Matrix3d I;
     I.setIdentity();
@@ -79,15 +71,13 @@ const Matrix3d VectorMath::TMatrix(const Vector3d &v)
     return (v*v.transpose() + (R.transpose()-I)*crossProductMatrix(v))/vnormsq;
 }
 
-const Matrix3d VectorMath::DrotVector(const Vector3d &axisangle, const Vector3d &rotatingVector)
-{
+const Matrix3d VectorMath::DrotVector(const Vector3d &axisangle, const Vector3d &rotatingVector) {
     Matrix3d R = rotationMatrix(axisangle);
     Matrix3d result = -R * crossProductMatrix(rotatingVector) * TMatrix(axisangle);
     return result;
 }
 
-const Eigen::Vector3d VectorMath::randomPointOnSphere()
-{
+const Vector3d VectorMath::randomPointOnSphere() {
     std::random_device r;
     std::mt19937 generator(r());
     std::normal_distribution<double> distribution(0.0,1.0);

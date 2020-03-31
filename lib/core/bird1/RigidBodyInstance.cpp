@@ -14,11 +14,8 @@ RigidBodyInstance::RigidBodyInstance(const RigidBodyTemplate &rbtemplate,
     const Eigen::Vector3d &cvel, const Eigen::Vector3d &w,
     double density)
     : c(c), theta(theta), cvel(cvel), w(w), density(density), rbtemplate_(rbtemplate)
-{
-}
+{ }
 
-RigidBodyInstance::~RigidBodyInstance()
-{    
-}
+RigidBodyInstance::~RigidBodyInstance() { }
 
 }

@@ -12,8 +12,7 @@ namespace bird1 {
 class RigidBodyTemplate;
 class RigidBodyInstance;
 
-class BirdsCore : public PhysicsCore
-{
+class BirdsCore : public PhysicsCore {
 public:
     // BirdsCore() : PhysicsCore(), sceneFile_("box.scn") {}
     BirdsCore();
@@ -21,32 +20,24 @@ public:
 
     virtual void initSimulation() override;
 
-    virtual
-    std::tuple<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::MatrixXd>
-    getCurrentMesh() const override;
+    virtual std::tuple<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::MatrixXd>
+        getCurrentMesh() const override;
 
     virtual bool simulateOneStep() override;
 
-    std::shared_ptr<SimParameters> getPointerToSimParameters()
-    {
-            return params_;
-    }
+    std::shared_ptr<SimParameters> getPointerToSimParameters() { return params_; }
 
     void clearScene();
 
     /*
      * The facade of adding RigidBodyTemplate and its instances.
      */
-    Eigen::VectorXi
-    addMesh(const std::string& file_name,
-            double scale,
-            const Eigen::MatrixXd& Qs);
+    Eigen::VectorXi addMesh(const std::string& file_name, double scale, const Eigen::MatrixXd& Qs);
 
     /*
      * add an RigidBodyInstance directly
      */
-    int32_t
-    addSingleInstance(std::shared_ptr<RigidBodyTemplate> rbt,
+    int32_t addSingleInstance(std::shared_ptr<RigidBodyTemplate> rbt,
 		      double density,
 		      const Eigen::Vector3d &c,
 		      const Eigen::Vector3d &theta,
@@ -58,8 +49,7 @@ public:
      *    add rigid body instance from Qs.
      *    Qs should be a (N, 13) matrix and each row
      */
-    Eigen::VectorXi
-    addInstances(std::shared_ptr<RigidBodyTemplate> rbt,
+    Eigen::VectorXi addInstances(std::shared_ptr<RigidBodyTemplate> rbt,
                  const Eigen::MatrixXd& Qs);
 
 
@@ -70,12 +60,16 @@ public:
     // Therefore the accumulation of numerical error during testing can be
     // eliminated by constantly synchronizing with the phase data from the reference code.
     // 
-    std::shared_ptr<RigidBodyInstance>
-    queryRigidBodyInstance(int32_t bid);
+    std::shared_ptr<RigidBodyInstance> queryRigidBodyInstance(int32_t bid);
 
 private:
     int32_t rigid_body_id_;
-    void computeForces(Eigen::VectorXd &Fc, Eigen::VectorXd &Ftheta);
+
+    /** Compute the force on the bodies due to gravitational attraction. */
+    Eigen::VectorXd force_gravity();
+
+    /** Compute the total force on the center of mass. */
+    Eigen::VectorXd force_c();
 
     double time_;
     std::shared_ptr<SimParameters> params_;

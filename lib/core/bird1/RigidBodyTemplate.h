@@ -9,8 +9,7 @@ namespace bird1 {
 
 class SignedDistanceField;
 
-class RigidBodyTemplate
-{
+class RigidBodyTemplate {
 public:
     RigidBodyTemplate(Eigen::Ref<Eigen::MatrixX3d> V,
                       Eigen::Ref<Eigen::MatrixX3i> F,
