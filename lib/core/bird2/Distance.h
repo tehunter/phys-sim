@@ -16,8 +16,7 @@ public:
                                             const Eigen::Vector3d& q0,
                                             const Eigen::Vector3d& q1,
                                             const Eigen::Vector3d& q2,
-                                            double eta)
-    {
+                                            double eta) {
         Eigen::Vector3d c = (q1 - q0).cross(q2 - q0);
         return c.dot(p - q0) * c.dot(p - q0) < eta * eta * c.dot(c);
     }
@@ -25,8 +24,7 @@ public:
     // Efficiently calculates whether or not the line spanned by vertices (p0, p1) is closer than eta distance to the line spanned by vertices (q0, q1).
     // This method does not require any floating point divisions and so is significantly faster than computing the distance itself.
     static bool lineLineDistanceLessThan(const Eigen::Vector3d& p0, const Eigen::Vector3d& p1,
-                                         const Eigen::Vector3d& q0, const Eigen::Vector3d& q1, double eta)
-    {
+                                         const Eigen::Vector3d& q0, const Eigen::Vector3d& q1, double eta) {
         Eigen::Vector3d c = (p1 - p0).cross(q1 - q0);
         return c.dot(q0 - p0) * c.dot(q0 - p0) < eta * eta * c.dot(c);
     }
@@ -35,8 +33,7 @@ public:
     // q0bary is the barycentric coordinate of q0, etc. (The distance from p to the triangle is the norm of this vector.)
     static Eigen::Vector3d vertexFaceDistance(const Eigen::Vector3d& p,
                                               const Eigen::Vector3d& q0, const Eigen::Vector3d& q1, const Eigen::Vector3d& q2,
-                                              double& q0bary, double& q1bary, double& q2bary)
-    {
+                                              double& q0bary, double& q1bary, double& q2bary) {
         Eigen::Vector3d ab = q1 - q0;
         Eigen::Vector3d ac = q2 - q0;
         Eigen::Vector3d ap = p - q0;
@@ -117,8 +114,7 @@ public:
     static Eigen::Vector3d edgeEdgeDistance(const Eigen::Vector3d& p0, const Eigen::Vector3d& p1,
                                             const Eigen::Vector3d& q0, const Eigen::Vector3d& q1,
                                             double& p0bary, double& p1bary,
-                                            double& q0bary, double& q1bary)
-    {
+                                            double& q0bary, double& q1bary) {
         Eigen::Vector3d d1 = p1 - p0;
         Eigen::Vector3d d2 = q1 - q0;
         Eigen::Vector3d r = p0 - q0;
@@ -171,8 +167,7 @@ public:
     static double meshSelfDistance(const Eigen::VectorXd& verts, const Eigen::Matrix3Xi& faces, const std::set<int>& fixedVerts);
 
 private:
-    static double clamp(double u)
-    {
+    static double clamp(double u) {
         return std::min(1.0, std::max(u, 0.0));
     }
 };

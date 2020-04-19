@@ -10,8 +10,7 @@ namespace bird2 {
 class RigidBodyTemplate;
 struct AABBNode;
 
-class RigidBodyInstance
-{
+class RigidBodyInstance {
 public:
     RigidBodyInstance(const RigidBodyTemplate &rbtemplate, const Eigen::Vector3d &c, const Eigen::Vector3d &theta, const Eigen::Vector3d &cvel, const Eigen::Vector3d &w, double density);
     ~RigidBodyInstance();

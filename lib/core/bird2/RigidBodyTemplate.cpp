@@ -27,33 +27,25 @@ RigidBodyTemplate::RigidBodyTemplate(Eigen::Ref<Eigen::MatrixX3d> V,
 }
 
 RigidBodyTemplate::RigidBodyTemplate(const Eigen::MatrixX3d& verts, const Eigen::MatrixX4i& tets)
-    : volume_(0)
-{
+    : volume_(0) {
     V = verts;
     T = tets;
     computeFaces();
     initialize();
 }
 
-RigidBodyTemplate::~RigidBodyTemplate()
-{
-}
+RigidBodyTemplate::~RigidBodyTemplate() { }
 
-void RigidBodyTemplate::initialize()
-{
+void RigidBodyTemplate::initialize() {
     volume_ = computeVolume();
     com_ = computeCenterOfMass();
     for (int i = 0; i < V.rows(); i++)
         V.row(i) -= com_;
     inertiaTensor_ = computeInertiaTensor();
-
-    std::cerr << "computeDistances, F rows: " << F.rows() << std::endl;
     distances_ = computeDistances();
-    std::cerr << "computeDistances Done" << std::endl;
 }
 
-void RigidBodyTemplate::computeFaces()
-{
+void RigidBodyTemplate::computeFaces() {
     struct triple {
         triple(int aa, int bb, int cc)
             : a(aa)
@@ -122,114 +114,90 @@ void RigidBodyTemplate::computeFaces()
     }
 }
 
-double RigidBodyTemplate::computeVolume()
-{
+double RigidBodyTemplate::computeVolume() {
     double volume = 0;
-    for (int i = 0; i < F.rows(); i++) {
-        Vector3d pts[3];
-        Vector3d centroid(0, 0, 0);
-        for (int j = 0; j < 3; j++) {
-            pts[j] = V.row(F(i, j));
-            centroid += pts[j];
-        }
-        Vector3d normal = (pts[1] - pts[0]).cross(pts[2] - pts[0]);
-        double area = 0.5 * normal.norm();
-        normal /= normal.norm();
+    for (int face = 0; face < F.rows(); face++) {
+        Vector3d a = V.row(F(face, 0));
+        Vector3d b = V.row(F(face, 1));
+        Vector3d c = V.row(F(face, 2));
 
-        centroid /= 3.0;
-        volume += centroid.dot(normal) * area / 3.0;
+        Vector3d norm_scaled = (b - a).cross(c - a);
+        Vector3d norm = norm_scaled.normalized();
+
+        /** Stoke's Theorem Magic **/
+        volume += (1/6.) * norm(0) * norm_scaled.norm() * (a(0) + b(0) + c(0));
     }
+
     return volume;
 }
 
-Vector3d RigidBodyTemplate::computeCenterOfMass()
-{
+Vector3d RigidBodyTemplate::computeCenterOfMass() {
     Vector3d cm(0, 0, 0);
-    for (int i = 0; i < F.rows(); i++) {
-        Vector3d pts[3];
-        for (int j = 0; j < 3; j++) {
-            pts[j] = V.row(F(i, j));
-        }
-        Vector3d normal = (pts[1] - pts[0]).cross(pts[2] - pts[0]);
-        double area = 0.5 * normal.norm();
-        normal /= normal.norm();
+    double volume = 0;
+    for (int face = 0; face < F.rows(); face++) {
+        Vector3d a = V.row(F(face, 0));
+        Vector3d b = V.row(F(face, 1));
+        Vector3d c = V.row(F(face, 2));
 
-        Vector3d term(0, 0, 0);
-        for (int j = 0; j < 3; j++) {
-            for (int k = 0; k < 3; k++) {
-                for (int l = k; l < 3; l++)
-                    term[j] += pts[k][j] * pts[l][j];
-            }
-            term[j] *= area * normal[j] / 12.0;
-        }
+        Vector3d norm_scaled = (b - a).cross(c - a);
+        Vector3d norm = norm_scaled.normalized();
 
-        cm += term;
+        /** More Stoke's Theorem Magic. */
+        volume += (1/6.) * norm(0) * norm_scaled.norm() * (a(0) + b(0) + c(0));
+        cm += (1/24.) * norm_scaled.norm() * norm.cwiseProduct(
+            a.cwiseProduct(a + b + c) + b.cwiseProduct(b + c) + c.cwiseProduct(c));
     }
 
-    return cm / volume_;
+    cm /= volume;
+    return cm;
 }
 
-Eigen::Matrix3d RigidBodyTemplate::computeInertiaTensor()
-{
-    Eigen::Matrix3d inertiaTensor;
-    inertiaTensor.setZero();
+Matrix3d RigidBodyTemplate::computeInertiaTensor() {
+    /**
+     * The inertia tensor has a relatively simple form consisting of xy, xz, yz, x^2, y^2, and z^2 terms.
+     * We'll use Stoke's Theorem to integrate up each term independently, and then create the final inertia tensor.
+     */
+    Vector3d squares = Vector3d::Zero(); // Stores x^2, y^2, z^2
+    Vector3d joints = Vector3d::Zero(); // Stores yz, xz, xy
 
-    Vector3d quads(0, 0, 0);
-    Vector3d mixed(0, 0, 0);
-    for (int i = 0; i < F.rows(); i++)
-    {
-        Vector3d pts[3];
-        for (int j = 0; j < 3; j++)
-        {
-            pts[j] = V.row(F(i, j));
-        }
-        Vector3d normal = (pts[1] - pts[0]).cross(pts[2] - pts[0]);
-        double area = 0.5 * normal.norm();
-        normal /= normal.norm();
+    double x3 = 0.0, y3 = 0.0, z3 = 0.0;
 
+    for (int face = 0; face < F.rows(); face++) {
+        // Need to do elementwise operations, so have array reps as well.
+        Vector3d a = V.row(F(face, 0)), b = V.row(F(face, 1)), c = V.row(F(face, 2));
+        Array3d ar = a.array(), br = b.array(), cr = b.array();
 
-        Vector3d term(0, 0, 0);
-        Vector3d mixterm(0, 0, 0);
-        for (int j = 0; j < 3; j++)
-        {
-            for (int k = 0; k < 3; k++)
-            {
-                for (int l = k; l < 3; l++)
-                {
-                    for (int m = l; m < 3; m++)
-                        term[j] += pts[k][j] * pts[l][j] * pts[m][j];
-                }
-            }
-            term[j] *= area*normal[j] / 30.0;
-        }
-        double mix = 0;
-        for (int j = 0; j < 3; j++)
-        {
-            mix += 6.0*pts[j][0] * pts[j][1] * pts[j][2];
-            for (int k = 0; k < 3; k++)
-            {
-                mix += 2.0*pts[j][k] * pts[j][(k + 1) % 3] * pts[(j + 1) % 3][(k + 2) % 3];
-                mix += 2.0*pts[j][k] * pts[j][(k + 1) % 3] * pts[(j + 2) % 3][(k + 2) % 3];
-            }
-            mix += pts[j][0] * pts[(j + 1) % 3][1] * pts[(j + 2) % 3][2];
-            mix += pts[j][2] * pts[(j + 1) % 3][1] * pts[(j + 2) % 3][0];
-        }
-        for (int j = 0; j < 3; j++)
-            mixterm[j] = mix*area*normal[j] / 60.0;
+        Vector3d norm_scaled = (b - a).cross(c - a);
+        Vector3d norm = norm_scaled.normalized();
 
-        quads += term;
-        mixed += mixterm;
+        double a0 = a(0), a1 = a(1), a2 = a(2), b0 = b(0), b1 = b(1), b2 = b(2), c0 = c(0), c1 = c(1), c2 = c(2);
+
+        // Using Eigen arrays to vectorize this gives slightly different results (by ~0.04) :|
+        squares(0) += norm_scaled.norm() * norm(0) * (a0*a0*a0 + (a0*a0 + b0*b0 + c0*c0)*(b0+c0) + a0*(b0*b0 + b0*c0 + c0*c0)) / 60.0;
+        squares(1) += norm_scaled.norm() * norm(1) * (a1*a1*a1 + (a1*a1 + b1*b1 + c1*c1)*(b1+c1) + a1*(b1*b1 + b1*c1 + c1*c1)) / 60.0;
+        squares(2) += norm_scaled.norm() * norm(2) * (a2*a2*a2 + (a2*a2 + b2*b2 + c2*c2)*(b2+c2) + a2*(b2*b2 + b2*c2 + c2*c2)) / 60.0;
+
+        // The integral of xyz over the triangle face. This one is ugly; I used the mathematica CForm command.
+        double xyz = (2*a2*b0*b1 + 6*b0*b1*b2 + a2*b1*c0 + 2*b1*b2*c0 + a2*b0*c1 + 2*b0*b2*c1 + 2*a2*c0*c1 + 2*b2*c0*c1
+            + 2*(b0*(b1 + c1) + c0*(b1 + 3*c1))*c2 + a0*(2*b1*b2 + b2*c1 + 2*a2*(b1 + c1) + b1*c2 + 2*c1*c2 + 2*a1*(3*a2 + b2 + c2))
+            + a1*(2*a2*(b0 + c0) + b0*(2*b2 + c2) + c0*(b2 + 2*c2))) / 120.;
+        joints += norm_scaled.norm() * norm * xyz;
     }
 
-    inertiaTensor << quads[1] + quads[2], -mixed[2], -mixed[1],
-        -mixed[2], quads[0] + quads[2], -mixed[0],
-        -mixed[1], -mixed[0], quads[0] + quads[1];
+    // Now we can extract out the terms and construct the inertia tensor.
+    double x2 = squares(0), y2 = squares(1), z2 = squares(2);
+    double yz = joints(0), xz = joints(1), xy = joints(2);
+
+    Matrix3d inertiaTensor;
+    inertiaTensor <<
+        y2 + z2, -xy, -xz,
+        -xy, x2 + z2, -yz,
+        -xz, -yz, x2 + y2;
 
     return inertiaTensor;
 }
 
-Eigen::VectorXd RigidBodyTemplate::computeDistances()
-{
+Eigen::VectorXd RigidBodyTemplate::computeDistances() {
     int nverts = (int)V.rows();
     int nfaces = (int)F.rows();
     Eigen::VectorXd distances;
@@ -243,21 +211,46 @@ Eigen::VectorXd RigidBodyTemplate::computeDistances()
                 dist = min(dist, distvec.norm());
             }
         }
+
         distances(i) = dist;
     }
     return distances;
 }
 
-double RigidBodyTemplate::distance(Vector3d p, int tet) const
-{
-    // TODO: Compute distance from point to object boundary
-    return 0;
+double RigidBodyTemplate::distance(Vector3d p, int tet) const {
+    // Extract the four corners of the tetrahedra that we are in.
+    Vector3d v1 = V.row(T(tet, 0)), v2 = V.row(T(tet, 1)),
+        v3 = V.row(T(tet, 2)), v4 = V.row(T(tet, 3));
+    double d1 = distances_[T(tet, 0)], d2 = distances_[T(tet, 1)],
+        d3 = distances_[T(tet, 2)], d4 = distances_[T(tet, 3)];
+
+    // Create the T matrix so we can invert it.
+    Matrix3d t = Matrix3d::Zero();
+    t.col(0) = v1 - v4;
+    t.col(1) = v2 - v4;
+    t.col(2) = v3 - v4;
+
+    Vector3d bary = t.inverse() * (p - v4);
+
+    return bary(0) * d1 + bary(1) * d2 + bary(2) * d3 + (1 - bary(0) - bary(1) - bary(2)) * d4;
 }
 
-Vector3d RigidBodyTemplate::Ddistance(int tet) const
-{
-    // TODO: Compute derivative of distance from point to boundary
-    return Vector3d { 0, 0, 0 };
+Vector3d RigidBodyTemplate::Ddistance(int tet) const {
+    // Extract the four corners of the tetrahedra that we are in.
+    Vector3d v1 = V.row(T(tet, 0)), v2 = V.row(T(tet, 1)),
+        v3 = V.row(T(tet, 2)), v4 = V.row(T(tet, 3));
+    double d1 = distances_[T(tet, 0)], d2 = distances_[T(tet, 1)],
+        d3 = distances_[T(tet, 2)], d4 = distances_[T(tet, 3)];
+
+    // Create the T matrix so we can invert it.
+    Matrix3d t = Matrix3d::Zero();
+    t.col(0) = v1 - v4;
+    t.col(1) = v2 - v4;
+    t.col(2) = v3 - v4;
+
+    Vector3d d(d1 - d4, d2 - d4, d3 - d4);
+
+    return d.transpose() * t.inverse();
 }
 
 }

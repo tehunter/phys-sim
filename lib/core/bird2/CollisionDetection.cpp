@@ -15,8 +15,7 @@ struct BBox {
     double maxs[3];
 };
 
-bool intersects(const BBox& b1, const BBox& b2)
-{
+bool intersects(const BBox& b1, const BBox& b2) {
     for (int i = 0; i < 3; i++) {
         if ((b1.maxs[i] < b2.mins[i]) || (b2.maxs[i] < b1.mins[i]))
             return false;
@@ -28,11 +27,9 @@ struct AABBNode {
     AABBNode()
         : left(NULL)
         , right(NULL)
-        , childtet(-1)
-    {
-    }
-    ~AABBNode()
-    {
+        , childtet(-1) { }
+
+    ~AABBNode() {
         delete left;
         delete right;
     }
@@ -46,20 +43,16 @@ struct AABBNode {
 class NodeComparator {
 public:
     NodeComparator(int axis)
-        : axis(axis)
-    {
-    }
+        : axis(axis) { }
 
     int axis;
 
-    bool operator()(const AABBNode* left, const AABBNode* right) const
-    {
+    bool operator()(const AABBNode* left, const AABBNode* right) const {
         return left->box.mins[axis] < right->box.mins[axis];
     }
 };
 
-AABBNode* buildAABB(vector<AABBNode*> nodes)
-{
+AABBNode* buildAABB(vector<AABBNode*> nodes) {
     if (nodes.size() == 0)
         return NULL;
     else if (nodes.size() == 1)
@@ -132,8 +125,7 @@ void refitAABB(const RigidBodyInstance* instance, AABBNode* node)
     }
 }
 
-AABBNode* buildAABB(const RigidBodyInstance* instance)
-{
+AABBNode* buildAABB(const RigidBodyInstance* instance) {
     int ntets = (int)instance->getTemplate().getTets().rows();
     vector<AABBNode*> leaves(ntets);
     for (int j = 0; j < ntets; j++) {
@@ -167,8 +159,7 @@ bool vertInTet(const Eigen::Vector3d& p,
                const Eigen::Vector3d& q1,
                const Eigen::Vector3d& q2,
                const Eigen::Vector3d& q3,
-               const Eigen::Vector3d& q4)
-{
+               const Eigen::Vector3d& q4) {
     if ((q2 - p).cross(q3 - p).dot(q4 - p) < 0)
         return false;
     if ((p - q1).cross(q3 - q1).dot(q4 - q1) < 0)
@@ -185,8 +176,7 @@ void tetTetIntersect(const AABBNode* node1,
                      int body1,
                      int body2,
                      const std::vector<std::shared_ptr<RigidBodyInstance>>& instances,
-                     std::set<Collision>& collisions)
-{
+                     std::set<Collision>& collisions) {
     if (body1 == body2)
         return;
 
@@ -223,8 +213,7 @@ void intersect(const AABBNode* node1,
                int body1,
                int body2,
                const std::vector<std::shared_ptr<RigidBodyInstance>>& instances,
-               std::set<Collision>& collisions)
-{
+               std::set<Collision>& collisions) {
     if (!node1 || !node2)
         return;
 
@@ -251,9 +240,7 @@ void intersect(const AABBNode* node1,
     }
 }
 
-std::set<Collision> 
-collisionDetection(std::vector<std::shared_ptr<RigidBodyInstance>>& instances)
-{
+std::set<Collision> collisionDetection(std::vector<std::shared_ptr<RigidBodyInstance>>& instances) {
     std::set<Collision> collisions;
     
     int nbodies = (int)instances.size();
@@ -268,7 +255,6 @@ collisionDetection(std::vector<std::shared_ptr<RigidBodyInstance>>& instances)
     }
 
     // floor
-
     for (int i = 0; i < nbodies; i++) {
         int nverts = instances[i]->getTemplate().getVerts().rows();
         for (int j = 0; j < nverts; j++) {
@@ -283,6 +269,7 @@ collisionDetection(std::vector<std::shared_ptr<RigidBodyInstance>>& instances)
             }
         }
     }
+
     return collisions;
 }
 

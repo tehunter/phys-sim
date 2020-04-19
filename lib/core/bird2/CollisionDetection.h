@@ -19,8 +19,7 @@ struct Collision {
     int collidingTet; // index into body2's tetrahedra list
 
     // constructed so that only one collision between a vertex and a rigid body will be kept (in case the vertex straddles multiple tets)
-    bool operator<(const Collision& other) const
-    {
+    bool operator<(const Collision& other) const {
         if (body1 < other.body1)
             return true;
         if (body1 > other.body1)
@@ -38,6 +37,7 @@ bool vertInTet(const Eigen::Vector3d& p,
                const Eigen::Vector3d& q2,
                const Eigen::Vector3d& q3,
                const Eigen::Vector3d& q4);
+
 std::set<Collision> collisionDetection(std::vector<std::shared_ptr<RigidBodyInstance>>& instances);
 AABBNode* buildAABB(const RigidBodyInstance* instance);
 void freeAABB(AABBNode*);
