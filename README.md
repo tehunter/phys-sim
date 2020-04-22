@@ -1,4 +1,4 @@
-# Furious Birds - Milestone 2
+# Cloth - Milestone 1
 Michael "Tres" Brenan (mb45487), John Herrick (jrh5735)
 
 ## Build Instructions
