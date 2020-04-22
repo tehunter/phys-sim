@@ -1,10 +1,8 @@
 #include "ClothCore.h"
 #include "SimParameters.h"
 #include <Eigen/SVD>
-#include "igl/procrustes.h"
 #include <iostream>
 #include <limits>
-#include <map>
 #include <unordered_set>
 #include <unordered_map>
 
@@ -173,14 +171,21 @@ void ClothCore::applyConstraints() {
         for (int face = 0; face < F_.rows(); face++) {
             int v1 = F_(face, 0), v2 = F_(face, 1), v3 = F_(face, 2);
 
-            Vector3d translation;
-            Matrix3d orig_points, curr_points, rotation;
+            Matrix3d orig_points, curr_points;
             orig_points << origQ_.row(v1), origQ_.row(v2), origQ_.row(v3);
             curr_points << Q_.row(v1), Q_.row(v2), Q_.row(v3);
 
-            igl::procrustes(orig_points, curr_points, rotation, translation);
+            // Let's try to solve the procrustes problem, I guess.
+            Vector3d orig_centroid = (1./3) * (orig_points.row(0) + orig_points.row(1) + orig_points.row(2));
+            Vector3d centroid = (1./3) * (curr_points.row(0) + curr_points.row(1) + curr_points.row(2));
 
-            Matrix3d transformed = (orig_points * rotation).rowwise() + translation.transpose();
+            Matrix3d centered_orig_points = orig_points.rowwise() - orig_centroid.transpose();
+            Matrix3d centered_curr_points = curr_points.rowwise() - centroid.transpose();
+
+            JacobiSVD<Matrix3d> svd(centered_curr_points.transpose() * centered_orig_points, ComputeThinU | ComputeThinV);
+            Matrix3d rotation = svd.matrixU() * svd.matrixV().transpose();
+
+            Matrix3d transformed = (centered_orig_points * rotation.transpose()).rowwise() + centroid.transpose();
 
             // Map the original points using the computed rotation and translation.
             Q_.row(v1) = weight * transformed.row(0) + (1 - weight) * curr_points.row(0);
@@ -196,15 +201,21 @@ void ClothCore::applyConstraints() {
         for (int hinge = 0; hinge < H_.rows(); hinge++) {
             int v1 = H_(hinge, 0), v2 = H_(hinge, 1), v3 = H_(hinge, 2), v4 = H_(hinge, 3);
 
-            Vector3d translation;
-            Matrix3d rotation;
             Matrix<double, 4, 3> orig_points, curr_points;
             orig_points << origQ_.row(v1), origQ_.row(v2), origQ_.row(v3), origQ_.row(v4);
             curr_points << Q_.row(v1), Q_.row(v2), Q_.row(v3), Q_.row(v4);
 
-            igl::procrustes(orig_points, curr_points, rotation, translation);
+            // Let's try to solve the procrustes problem, I guess.
+            Vector3d orig_centroid = (1./4) * (orig_points.row(0) + orig_points.row(1) + orig_points.row(2) + orig_points.row(3));
+            Vector3d centroid = (1./4) * (curr_points.row(0) + curr_points.row(1) + curr_points.row(2) + curr_points.row(3));
 
-            Matrix<double, 4, 3> transformed = (orig_points * rotation).rowwise() + translation.transpose();
+            Matrix<double, 4, 3> centered_orig_points = orig_points.rowwise() - orig_centroid.transpose();
+            Matrix<double, 4, 3> centered_curr_points = curr_points.rowwise() - centroid.transpose();
+
+            JacobiSVD<Matrix3d> svd(centered_curr_points.transpose() * centered_orig_points, ComputeThinU | ComputeThinV);
+            Matrix3d rotation = svd.matrixU() * svd.matrixV().transpose();
+
+            Matrix<double, 4, 3> transformed = (centered_orig_points * rotation.transpose()).rowwise() + centroid.transpose();
 
             // Map the original points using the computed rotation and translation.
             Q_.row(v1) = weight * transformed.row(0) + (1 - weight) * curr_points.row(0);
