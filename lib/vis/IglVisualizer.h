@@ -18,16 +18,13 @@ protected:
     PhysicsCore *core_;
     PhysicsHook *hook_;
 public:
-    IglVisualizer()
-    {
-    }
+    IglVisualizer() { }
 
-    void init(PhysicsCore* core, PhysicsHook* hook)
-    {
+    void init(PhysicsCore* core, PhysicsHook* hook) {
         core_ = core;
         hook_ = hook;
 
-	setupViewer();
+        setupViewer();
 
         viewer_.callback_key_pressed = [=](Viewer& viewer, unsigned int key, int mod) {
             return this->keyCallback(viewer, key, mod);
@@ -48,8 +45,7 @@ public:
         };
     }
 
-    virtual void setupViewer()
-    {
+    virtual void setupViewer() {
         viewer_.core().orthographic = true;
         viewer_.core().camera_zoom = 4.0;
         viewer_.data().show_lines = false;
@@ -59,34 +55,28 @@ public:
 
     virtual ~IglVisualizer() {};
 
-    virtual bool drawCallback(Viewer &viewer)
-    {
-        if (!hook_)
-            return false;
+    virtual bool drawCallback(Viewer &viewer) {
+        if (!hook_) return false;
         hook_->render(viewer);
         return false;
     }
 
     virtual void renderGeometry(Eigen::MatrixXd renderQ,
 				Eigen::MatrixXi renderF,
-				Eigen::MatrixXd renderC)
-    {
+				Eigen::MatrixXd renderC) {
         hook_->useGeometry(renderQ, renderF, renderC);
         hook_->render(viewer_);
     }
 
-    virtual bool keyCallback(Viewer& viewer, unsigned int key, int modifiers)
-    {
-        if (key == ' ')
-        {
+    virtual bool keyCallback(Viewer& viewer, unsigned int key, int modifiers) {
+        if (key == ' ') {
             toggleSimulation();
             return true;
         }
         return false;
     }
 
-    virtual bool mouseCallback(Viewer& viewer, int button, int modifier)
-    {
+    virtual bool mouseCallback(Viewer& viewer, int button, int modifier) {
         if (!hook_)
             return false;
 
@@ -97,21 +87,15 @@ public:
         return true;
     }
 
-    virtual bool mouseScrollCallback(Viewer& viewer, float delta)
-    {
-        return true;
-    }
+    virtual bool mouseScrollCallback(Viewer& viewer, float delta) { return true; }
 
-    virtual bool drawGUI()
-    {
-        if (ImGui::CollapsingHeader("Simulation Control", ImGuiTreeNodeFlags_DefaultOpen))
-        {
-            if (ImGui::Button("Run/Pause Sim", ImVec2(-1, 0)))
-            {
+    virtual bool drawGUI() {
+        if (ImGui::CollapsingHeader("Simulation Control", ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::Button("Run/Pause Sim", ImVec2(-1, 0))) {
                 toggleSimulation();
             }
-            if (ImGui::Button("Reset Sim", ImVec2(-1, 0)))
-            {
+
+            if (ImGui::Button("Reset Sim", ImVec2(-1, 0))) {
                 resetSimulation();
             }
         }
@@ -119,28 +103,20 @@ public:
         return false;
     }
 
-    void run()
-    {
+    void run() {
         viewer_.launch();
     }
 
 protected:
-    void toggleSimulation()
-    {
-        if (!hook_)
-            return;
+    void toggleSimulation() {
+        if (!hook_) return;
 
-        if (hook_->isPaused())
-            hook_->run();
-        else
-            hook_->pause();
+        if (hook_->isPaused()) hook_->run();
+        else hook_->pause();
     }
 
-    void resetSimulation()
-    {
-        if (!hook_)
-            return;
-
+    void resetSimulation() {
+        if (!hook_) return;
         hook_->reset();
     }
 };

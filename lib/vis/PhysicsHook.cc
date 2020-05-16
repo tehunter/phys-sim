@@ -2,37 +2,25 @@
 #include <core/PhysicsCore.h>
 #include <iostream>
 
-PhysicsHook::PhysicsHook(PhysicsCore* core)
-	: core_(core)
-{
+PhysicsHook::PhysicsHook(PhysicsCore* core) : core_(core) {
 }
 
-PhysicsHook::~PhysicsHook()
-{
+PhysicsHook::~PhysicsHook() {
 	killSimThread();
 }
 
-void
-PhysicsHook::initSimulation()
-{
+void PhysicsHook::initSimulation() {
 	core_->initSimulation();
 }
 
-void
-PhysicsHook::tick()
-{
-}
+void PhysicsHook::tick() { }
 
-void
-PhysicsHook::updateRenderGeometry()
-{
+void PhysicsHook::updateRenderGeometry() {
 	std::tie(renderQ_, renderF_, renderC_) = core_->getCurrentMesh();
 	render_data_dirty_ = true;
 }
 
-void
-PhysicsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
-{
+void PhysicsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer) {
 	viewer.data().clear();
     if (renderQ_.rows() > 0 && renderF_.rows() > 0) {
         viewer.data().set_mesh(renderQ_, renderF_);
@@ -45,9 +33,7 @@ PhysicsHook::renderRenderGeometry(igl::opengl::glfw::Viewer &viewer)
 /*
  * Runs the simulation, if it has been paused (or never started).
  */
-void
-PhysicsHook::run()
-{
+void PhysicsHook::run() {
 	status_mutex.lock();
 	please_pause = false;
 	status_mutex.unlock();
@@ -56,9 +42,7 @@ PhysicsHook::run()
 /*
  * Resets the simulation (and leaves it in a paused state; call run() to start it).
  */
-void
-PhysicsHook::reset()
-{
+void PhysicsHook::reset() {
 	killSimThread();
 	please_die = running = false;
 	please_pause = true;
@@ -71,17 +55,13 @@ PhysicsHook::reset()
  * Pause a running simulation. The simulation will pause at the end of its current "step"; this method will not
  * interrupt simulateOneStep mid-processing.
  */
-void
-PhysicsHook::pause()
-{
+void PhysicsHook::pause() {
 	status_mutex.lock();
 	please_pause = true;
 	status_mutex.unlock();
 }
 
-bool
-PhysicsHook::isPaused()
-{
+bool PhysicsHook::isPaused() {
 	bool ret = false;
 	status_mutex.lock();
 	if(running && please_pause)
@@ -90,25 +70,19 @@ PhysicsHook::isPaused()
 	return ret;
 }
 
-void
-PhysicsHook::useGeometry(Eigen::MatrixXd renderQ, Eigen::MatrixXi renderF, Eigen::MatrixXd renderC)
-{
+void PhysicsHook::useGeometry(Eigen::MatrixXd renderQ, Eigen::MatrixXi renderF, Eigen::MatrixXd renderC) {
 	renderQ_ = std::move(renderQ);
 	renderF_ = std::move(renderF);
 	renderC_ = std::move(renderC);
 }
 
-void
-PhysicsHook::render(igl::opengl::glfw::Viewer &viewer)
-{
+void PhysicsHook::render(igl::opengl::glfw::Viewer &viewer) {
 	render_mutex.lock();
 	renderRenderGeometry(viewer);
 	render_mutex.unlock();
 }
 
-void
-PhysicsHook::runSimThread()
-{
+void PhysicsHook::runSimThread() {
 	status_mutex.lock();
 	running = true;
 	status_mutex.unlock();
@@ -140,9 +114,7 @@ PhysicsHook::runSimThread()
 	status_mutex.unlock();
 }
 
-void
-PhysicsHook::killSimThread()
-{
+void PhysicsHook::killSimThread() {
 	if (sim_thread) {
 		status_mutex.lock();
 		please_die = true;
