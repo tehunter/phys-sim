@@ -29,7 +29,20 @@ void BoidHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu) {
         ImGui::Combo("Click Mode", (int *)&params_.click_mode, "Spawn 1 Boid\0Spawn 5 Boids\0Spawn 20 Boids\0Spawner\0Goal\0\0");
     }
     if (ImGui::CollapsingHeader("Simulation Options", ImGuiTreeNodeFlags_DefaultOpen)) {
-
+        ImGui::InputDouble("Speed", &params_.speed);
+        ImGui::InputDouble("View Radius", &params_.view_radius);
+    }
+    if (ImGui::CollapsingHeader("Rules", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::Checkbox("Walls Enabled", &params_.arena_enabled);
+        ImGui::Checkbox("Separation Enabled", &params_.separation_enabled);
+        ImGui::InputDouble("Separation Strength", &params_.separation_strength);
+        ImGui::InputDouble("Separation Distance", &params_.separation_threshold);
+        ImGui::Checkbox("COM Enabled", &params_.follow_com_enabled);
+        ImGui::InputDouble("COM Strength", &params_.follow_com_strength);
+        ImGui::Checkbox("VEL Enabled", &params_.follow_vel_enabled);
+        ImGui::InputDouble("VEL Strength", &params_.follow_vel_strength);
+        ImGui::Checkbox("Inertia Enabled", &params_.inertia_enabled);
+        ImGui::InputDouble("Inertia Strength", &params_.inertia_strength);
     }
 }
 
