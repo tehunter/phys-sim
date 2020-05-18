@@ -38,6 +38,9 @@ public:
         viewer_.callback_mouse_scroll = [=](Viewer& viewer, float delta) {
             return this->mouseScrollCallback(viewer, delta);
         };
+        viewer_.callback_mouse_move = [=](Viewer& viewer, int mouse_x, int mouse_y) {
+            return this->mouseMoveCallback(viewer, mouse_x, mouse_y);
+        };
 
         viewer_.plugins.push_back(&menu_);
         menu_.callback_draw_viewer_menu = [=]() {
@@ -77,13 +80,22 @@ public:
     }
 
     virtual bool mouseCallback(Viewer& viewer, int button, int modifier) {
-        if (!hook_)
-            return false;
+        if (!hook_) return false;
 
         Eigen::Vector3f pos(viewer.down_mouse_x, viewer.down_mouse_y, 0);
         Eigen::Matrix4f model = viewer.core().view;
         Eigen::Vector3f unproj = igl::unproject(pos, model, viewer.core().proj, viewer.core().viewport);
         hook_->mouseClicked(unproj[0], -unproj[1], button);
+        return true;
+    }
+
+    virtual bool mouseMoveCallback(Viewer& viewer, int mouse_x, int mouse_y) {
+        if (!hook_) return false;
+
+        Eigen::Vector3f pos(mouse_x, mouse_y, 0);
+        Eigen::Matrix4f model = viewer.core().view;
+        Eigen::Vector3f unproj = igl::unproject(pos, model, viewer.core().proj, viewer.core().viewport);
+        hook_->mouseMoved(unproj[0], -unproj[1]);
         return true;
     }
 

@@ -60,6 +60,11 @@ public:
      */
     virtual void mouseClicked(double x, double y, int button) {}
 
+    /**
+     * Called when the mouse moves within the simulation panel.
+     */
+    virtual void mouseMoved(double x, double y) {}
+
     /*
      * Runs the simulation, if it has been paused (or never started).
      */

@@ -16,6 +16,11 @@ struct MouseClick {
     SimParameters::Color color;
 };
 
+struct MouseMove {
+    double x;
+    double y;
+};
+
 class BoidHook : public PhysicsHook {
 public:
     BoidHook(BoidCore* core);
@@ -24,6 +29,8 @@ public:
     virtual void drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu) override;
 
     virtual void mouseClicked(double x, double y, int button) override;
+
+    virtual void mouseMoved(double x, double y) override;
 
     virtual void tick();
 
@@ -34,6 +41,7 @@ private:
 
     std::mutex message_mutex;
     std::deque<MouseClick> mouseClicks_;
+    std::deque<MouseMove> mouse_moves;
 };
 
 }

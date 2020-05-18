@@ -23,17 +23,30 @@ void BoidHook::mouseClicked(double x, double y, int button) {
     message_mutex.unlock();
 }
 
+void BoidHook::mouseMoved(double x, double y) {
+    message_mutex.lock();
+    {
+        MouseMove mm;
+        mm.x = x;
+        mm.y = y;
+        mouse_moves.push_back(mm);
+    }
+    message_mutex.unlock();
+}
+
 void BoidHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu) {
     if (ImGui::CollapsingHeader("UI Options", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Combo("Color", (int*)&params_.color, "Red\0Green\0Yellow\0Blue\0\0");
-        ImGui::Combo("Click Mode", (int *)&params_.click_mode, "Spawn 1 Boid\0Spawn 5 Boids\0Spawn 20 Boids\0Spawner\0Goal\0\0");
+        ImGui::Combo("Click Mode", (int *)&params_.click_mode, "Spawn 1 Boid\0Spawn 5 Boids\0Spawn 20 Boids\0Goal\0Obstacle\0Predator\0\0");
+        ImGui::Combo("Mouse Mode", (int*) &params_.mouse_mode, "None\0Avoid\0Follow\0\0");
     }
     if (ImGui::CollapsingHeader("Simulation Options", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::InputDouble("Speed", &params_.speed);
         ImGui::InputDouble("View Radius", &params_.view_radius);
     }
     if (ImGui::CollapsingHeader("Rules", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::Checkbox("Walls Enabled", &params_.arena_enabled);
+        ImGui::Checkbox("Walls Enabled", &params_.walls_enabled);
+        ImGui::InputDouble("Wall Strength", &params_.wall_strength);
         ImGui::Checkbox("Separation Enabled", &params_.separation_enabled);
         ImGui::InputDouble("Separation Strength", &params_.separation_strength);
         ImGui::InputDouble("Separation Distance", &params_.separation_threshold);
@@ -41,13 +54,19 @@ void BoidHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu) {
         ImGui::InputDouble("COM Strength", &params_.follow_com_strength);
         ImGui::Checkbox("VEL Enabled", &params_.follow_vel_enabled);
         ImGui::InputDouble("VEL Strength", &params_.follow_vel_strength);
-        ImGui::Checkbox("Inertia Enabled", &params_.inertia_enabled);
-        ImGui::InputDouble("Inertia Strength", &params_.inertia_strength);
+        ImGui::Checkbox("Goals Enabled", &params_.goals_enabled);
+        ImGui::InputDouble("Goal Strength", &params_.goal_strength);
+        ImGui::Checkbox("Avoid Pred. Enabled", &params_.avoid_predators_enabled);
+        ImGui::InputDouble("Avoid Pred. Strength", &params_.avoid_predators_strength);
+    }
+    if (ImGui::CollapsingHeader("Predators", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::InputDouble("Predator View Range", &params_.predator_view_radius);
+        ImGui::InputDouble("Predator Speed", &params_.predator_speed);
+        ImGui::InputDouble("Chase Strength", &params_.predator_chase_strength);
     }
 }
 
 void BoidHook::tick() {
-    enum ClickMode { CM_BOID1, CM_BOID5, CM_BOID20, CM_SPAWNER, CM_GOAL };
     message_mutex.lock();
     {
         while (!mouseClicks_.empty()) {
@@ -63,13 +82,22 @@ void BoidHook::tick() {
                 case SimParameters::ClickMode::CM_BOID20:
                     core_->spawn_boids(mc.x, mc.y, 20, mc.color);
                     break;
-                case SimParameters::ClickMode::CM_SPAWNER:
-                    core_->create_spawner(mc.x, mc.y, mc.color);
-                    break;
                 case SimParameters::ClickMode::CM_GOAL:
                     core_->create_goal(mc.x, mc.y, mc.color);
                     break;
+                case SimParameters::ClickMode::CM_OBSTACLE:
+                    core_->create_obstacle(mc.x, mc.y);
+                    break;
+                case SimParameters::ClickMode::CM_PREDATOR:
+                    core_->spawn_predator(mc.x, mc.y);
+                    break;
             }
+        }
+
+        while (!mouse_moves.empty()) {
+            MouseMove mm = mouse_moves.front();
+            mouse_moves.pop_front();
+            core_->update_mouse_position(mm.x, mm.y);
         }
     }
     message_mutex.unlock();
