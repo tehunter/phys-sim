@@ -78,6 +78,7 @@ bool BoidCore::simulateOneStep() {
         if (params_->walls_enabled) us.velocity += params_->wall_strength * params_->speed * this->velocity_wall(us.position);
         if (params_->goals_enabled) us.velocity += params_->goal_strength * params_->speed * this->velocity_goal(us).normalized();
         if (params_->avoid_predators_enabled) us.velocity += params_->avoid_predators_strength * params_->speed * this->velocity_avoid_preds(us).normalized();
+        if (params_->avoid_obstacles_enabled) us.velocity += params_->avoid_obstacles_strength * params_->speed * this->velocity_obstacle(us.position).normalized();
 
         us.velocity = us.velocity.normalized() * params_->speed;
         us.position += us.velocity;
@@ -112,6 +113,7 @@ bool BoidCore::simulateOneStep() {
 
         // Handle the edges of the arena, and goals.
         if (params_->walls_enabled) us.velocity += params_->wall_strength * params_->predator_speed * this->velocity_wall(us.position);
+        if (params_->avoid_obstacles_enabled) us.velocity += params_->avoid_obstacles_strength * params_->speed * this->velocity_obstacle(us.position).normalized();
 
         us.velocity = us.velocity.normalized() * params_->predator_speed;
         us.position += us.velocity;
@@ -136,8 +138,7 @@ void BoidCore::spawn_predator(double x, double y) {
 }
 
 void BoidCore::create_obstacle(double x, double y) {
-    // TODO: Make radius configurable.
-    this->obstacles.emplace_back(Vector2d(x, y), 0.05);
+    this->obstacles.emplace_back(Vector2d(x, y), params_->obstacle_radius);
 }
 
 // Create a boid goal at the given location with the given color.
@@ -263,6 +264,18 @@ Vector2d BoidCore::velocity_wall(Vector2d position) const {
     return result.normalized();
 }
 
+Vector2d BoidCore::velocity_obstacle(Vector2d position) const {
+    Vector2d result(0.0, 0.0);
+    for (const Obstacle& ob : this->obstacles) {
+        double distance = (ob.position - position).norm();
+        if (distance > ob.radius + SimParameters::OBSTACLE_MARGIN) continue;
+
+        result += (position - ob.position);
+    }
+
+    return result;
+}
+
 Vector2d BoidCore::velocity_goal(const Boid& us) const {
     // Check if we have a goal in the first place.
     auto goal = this->goal(us.color);
@@ -277,6 +290,11 @@ Vector2d BoidCore::velocity_avoid_preds(const Boid& us) const {
     for (const Predator& neighbor : this->predators) {
         if ((neighbor.position - us.position).norm() > params_->view_radius + 0.025 * neighbor.size_factor()) continue;
         avoid += (us.position - neighbor.position);
+    }
+
+    if (params_->mouse_mode == SimParameters::MM_AVOID) {
+        double mouse_dist = (us.position - this->mouse_location).norm();
+        if (mouse_dist < params_->view_radius) avoid += (us.position - this->mouse_location);
     }
 
     return avoid;
@@ -358,7 +376,27 @@ std::tuple<MatrixXd, MatrixXi, MatrixXd> BoidCore::getCurrentMesh() const {
         faces.emplace_back(start_index, start_index + 2, start_index + 3);
     }
 
-    // Render obstacles as circle-looking things.
+    // Render obstacles, which can get very chonky and big.
+    for (const Obstacle& obstacle : this->obstacles) {
+        int numPoints = 20;
+
+        // Create the vertices.
+        int center_index = verts.size();
+        verts.push_back(z0(obstacle.position));
+        vertexColors.push_back(OBSTACLE_COLOR);
+        int start_index = verts.size();
+        for (int i = 0; i < numPoints; i++) {
+            double theta = (2*M_PI/numPoints) * i;
+            verts.push_back(z0(obstacle.position + Vector2d(std::cos(theta), std::sin(theta)) * obstacle.radius));
+            vertexColors.push_back(OBSTACLE_COLOR);
+        }
+
+        // Then create the corresponding faces.
+        for (int i = 0; i < numPoints - 1; i++)
+            faces.emplace_back(start_index + i, start_index + i + 1, center_index);
+        faces.emplace_back(start_index + numPoints - 1, start_index, center_index);
+    }
+    
 
     Eigen::MatrixXd renderQ;
     Eigen::MatrixXi renderF;

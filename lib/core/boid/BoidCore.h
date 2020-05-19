@@ -66,6 +66,8 @@ public:
     Eigen::Vector2d velocity_goal(const Boid& us) const;
     // Obtains the velocity for avoiding nearby predators.
     Eigen::Vector2d velocity_avoid_preds(const Boid& us) const;
+    // Obtains the velocity for avoiding obstacles.
+    Eigen::Vector2d velocity_obstacle(Eigen::Vector2d position) const;
 
     // Internal method which returns a mesh representing the current state.
     std::tuple<Eigen::MatrixXd, Eigen::MatrixXi, Eigen::MatrixXd> getCurrentMesh() const override;

@@ -6,6 +6,9 @@ namespace boid {
 /** Simulation parameters for the boid simulation. */
 struct SimParameters {
 
+    // The distance from an obstacle at which point it starts to push things away.
+    static constexpr double OBSTACLE_MARGIN = 0.01;
+
     // The distance from the wall at which point the wall starts to push back on the boid.
     static constexpr double WALL_MARGIN = 0.03;
 
@@ -96,6 +99,9 @@ struct SimParameters {
     // How strongly predators decide to chase nearby boids.
     double predator_chase_strength;
 
+    // How large the created obstacle should be.
+    double obstacle_radius;
+
     SimParameters() {
         color = RED;
         click_mode = CM_BOID1;
@@ -111,18 +117,20 @@ struct SimParameters {
         avoid_obstacles_enabled = true;
         avoid_predators_enabled = true;
 
-        wall_strength = 0.005;
+        wall_strength = 0.03;
         follow_com_strength = 0.005;
         follow_vel_strength = 0.005;
         separation_strength = 0.04;
         separation_threshold = 0.03;
         goal_strength = 0.01;
-        avoid_obstacles_strength = 0.02;
+        avoid_obstacles_strength = 0.2;
         avoid_predators_strength = 0.05;
 
         predator_view_radius = 2 * view_radius;
         predator_speed = 1.6 * speed;
         predator_chase_strength = 0.05;
+
+        obstacle_radius = 0.04;
     }
 };
 

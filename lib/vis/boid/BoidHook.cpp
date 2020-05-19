@@ -39,6 +39,7 @@ void BoidHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu) {
         ImGui::Combo("Color", (int*)&params_.color, "Red\0Green\0Yellow\0Blue\0\0");
         ImGui::Combo("Click Mode", (int *)&params_.click_mode, "Spawn 1 Boid\0Spawn 5 Boids\0Spawn 20 Boids\0Goal\0Obstacle\0Predator\0\0");
         ImGui::Combo("Mouse Mode", (int*) &params_.mouse_mode, "None\0Avoid\0Follow\0\0");
+        ImGui::InputDouble("Obstacle Radius", &params_.obstacle_radius);
     }
     if (ImGui::CollapsingHeader("Simulation Options", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::InputDouble("Speed", &params_.speed);
@@ -58,6 +59,8 @@ void BoidHook::drawGUI(igl::opengl::glfw::imgui::ImGuiMenu &menu) {
         ImGui::InputDouble("Goal Strength", &params_.goal_strength);
         ImGui::Checkbox("Avoid Pred. Enabled", &params_.avoid_predators_enabled);
         ImGui::InputDouble("Avoid Pred. Strength", &params_.avoid_predators_strength);
+        ImGui::Checkbox("Avoid Obs. Enabled", &params_.avoid_obstacles_enabled);
+        ImGui::InputDouble("Avoid Obs. Strength", &params_.avoid_obstacles_strength);
     }
     if (ImGui::CollapsingHeader("Predators", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::InputDouble("Predator View Range", &params_.predator_view_radius);
